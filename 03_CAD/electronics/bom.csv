@@ -1,0 +1,96 @@
+﻿位号,型号,数量,封装,作用
+R1,10k,1,Resistor_SMD:R_0805_2012Metric,FIRE_INHIBIT_N 下拉，开路即否决
+R2,10k,1,Resistor_SMD:R_0805_2012Metric,FIRE_INHIBIT_N 串联限流
+R3,10k,1,Resistor_SMD:R_0805_2012Metric,EXTERNAL_ALLOW 下拉，开路即拒绝
+R4,10k,1,Resistor_SMD:R_0805_2012Metric,EXTERNAL_ALLOW 串联限流
+R5,10k,1,Resistor_SMD:R_0805_2012Metric,POCKET_ALIGNED 下拉，开路即禁止
+R6,10k,1,Resistor_SMD:R_0805_2012Metric,POCKET_ALIGNED 串联限流
+R7,10k,1,Resistor_SMD:R_0805_2012Metric,MECH_RECOVERED_RAW 上拉，断线被反相器判为未复位
+R8,10k,1,Resistor_SMD:R_0805_2012Metric,ARM_CMD 下拉，开路不武装
+R9,10k,1,Resistor_SMD:R_0805_2012Metric,DISARM_CMD 下拉
+R10,10k,1,Resistor_SMD:R_0805_2012Metric,FAULT_CMD 下拉
+R11,1k,1,Resistor_SMD:R_0805_2012Metric,MCU_RELEASE_CMD 串联限流
+R12,10k,1,Resistor_SMD:R_0805_2012Metric,MCU_RELEASE_CMD 下拉，开路无请求
+R13,1k,1,Resistor_SMD:R_0805_2012Metric,PRELOAD_CMD 串联限流
+R14,10k,1,Resistor_SMD:R_0805_2012Metric,PRELOAD_CMD 下拉，开路不预载
+R15,10k,1,Resistor_SMD:R_0805_2012Metric,PAN_HOME 开关下拉，开路视为未归零
+R16,10k,1,Resistor_SMD:R_0805_2012Metric,TILT_HOME 开关下拉，开路视为未归零
+R17,10k,1,Resistor_SMD:R_0805_2012Metric,MAG_HOME 开关下拉，开路视为未归零
+R18,10k,1,Resistor_SMD:R_0805_2012Metric,MASTER_ENABLE_RAW 下拉，开路即失能
+R19,33k,1,Resistor_SMD:R_0805_2012Metric,单稳态定时电阻 R_EXT
+R20,22k,1,Resistor_SMD:R_0805_2012Metric,单稳态定时电阻 R_EXT
+R21,100k,1,Resistor_SMD:R_0805_2012Metric,MOSFET 栅极下拉（开路即关断）
+R22,100,1,Resistor_SMD:R_0805_2012Metric,MOSFET 栅极串联电阻
+R23,100k,1,Resistor_SMD:R_0805_2012Metric,MOSFET 栅极下拉（开路即关断）
+R24,1k,1,Resistor_SMD:R_0805_2012Metric,串联限流/指示灯限流
+R25,1k,1,Resistor_SMD:R_0805_2012Metric,串联限流/指示灯限流
+R26,100k,1,Resistor_SMD:R_0805_2012Metric,POCKET_OR_MODE_A 下拉，两路都开路即禁止
+R27,100k,1,Resistor_SMD:R_0805_2012Metric,MODE_A_RAW 下拉，装盘或断线即撤销旁路
+R28,100k,1,Resistor_SMD:R_0805_2012Metric,POR 定时上拉
+R29,10k,1,Resistor_SMD:R_0805_2012Metric,FAULT_SET_N 上拉
+R30,10k,1,Resistor_SMD:R_0805_2012Metric,FAULT_RESET_N 上拉
+R31,10k,1,Resistor_SMD:R_0805_2012Metric,ARM_RESET_N 上拉
+R32,100k,1,Resistor_SMD:R_0805_2012Metric,HOME_AND 下拉，开路即无归零脉冲
+C1,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C2,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C3,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C4,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C5,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C6,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C7,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C8,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C9,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C10,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C11,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C12,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C13,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C14,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C15,1u,1,Capacitor_SMD:C_0805_2012Metric,单稳态定时电容 C_EXT
+C16,1u,1,Capacitor_SMD:C_0805_2012Metric,单稳态定时电容 C_EXT
+C17,10u,1,Capacitor_SMD:C_1206_3216Metric,逻辑轨储能
+C18,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C19,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C20,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C21,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C22,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+C23,100n,1,Capacitor_SMD:C_0805_2012Metric,滤波或去耦
+D1,SS34,1,Diode_SMD:D_SMA,肖特基：释放电磁铁续流
+D7,BAT54W,1,Diode_SMD:D_SOD-123,肖特基：模式A旁路与对齐信号的二极管或
+D8,BAT54W,1,Diode_SMD:D_SOD-123,肖特基：模式A旁路与对齐信号的二极管或
+D11,1N4148W,1,Diode_SMD:D_SOD-123,小信号：上电复位脉冲到两个锁存器
+D12,1N4148W,1,Diode_SMD:D_SOD-123,小信号：上电复位脉冲到两个锁存器
+D13,SMBJ16A,1,Diode_SMD:D_SMB,TVS：执行轨瞬态钳位
+D14,SS14,1,Diode_SMD:D_SMA,肖特基：逻辑轨输入防反
+D9,GATE_OK,1,LED_SMD:LED_0805_2012Metric,LED：释放门 Q2 使能指示
+D10,FAULT,1,LED_SMD:LED_0805_2012Metric,LED：故障锁存指示
+F1,MF-MSMF050,1,Fuse:Fuse_1206_3216Metric,自恢复保险丝：逻辑轨
+F2,MF-MSMF200,1,Fuse:Fuse_1812_4532Metric,自恢复保险丝：执行轨
+F3,MF-MSMF110,1,Fuse:Fuse_1206_3216Metric,自恢复保险丝：预载轨
+M1,AO3400A,1,Package_TO_SOT_SMD:SOT-23,低边N沟道MOSFET：释放/预载执行器回流开关
+M2,AO3400A,1,Package_TO_SOT_SMD:SOT-23,低边N沟道MOSFET：释放/预载执行器回流开关
+JP1,MODE_A_EN,1,Jumper:SolderJumper-2_P1.3mm_Open_Pad1.0x1.5mm,焊接跳线：模式A旁路使能，默认闭合
+U1,74HC21,1,Package_SO:SOIC-14_3.9x8.7mm_P1.27mm,双4输入与门：构成 Q1/Q2 与门树
+U2,74HC123,1,Package_SO:SOIC-16_3.9x9.9mm_P1.27mm,双可重触发单稳态：钳释放脉冲宽度、产生归零复位脉冲
+U3,74HC74,1,Package_SO:SOIC-14_3.9x8.7mm_P1.27mm,双D触发器：故障锁存器 U3A、武装锁存器 U3B
+U4,74HC11,1,Package_SO:SOIC-14_3.9x8.7mm_P1.27mm,三3输入与门：HOME 与、武装时钟门、取消武装逻辑
+U5,74HC14,1,Package_SO:SOIC-14_3.9x8.7mm_P1.27mm,六施密特反相器：MECH_RECOVERED 反相、故障/脉冲/命令取反、整形
+U6,74HC08,1,Package_SO:SOIC-14_3.9x8.7mm_P1.27mm,四2输入与门：主使能与预载的故障门控
+J1,PWR_IN,1,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,连接器：PWR_IN
+J2,ACT_OUT,1,Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical,连接器：ACT_OUT
+J3,SAFETY_IN,1,Connector_PinHeader_2.54mm:PinHeader_1x20_P2.54mm_Vertical,连接器：SAFETY_IN
+J4,PRELOAD_OUT,1,Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical,连接器：PRELOAD_OUT
+J5,HOME,1,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,连接器：HOME
+J6,MODE_MAG,1,Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical,连接器：MODE_MAG
+J7,ESTOP,1,Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical,连接器：ESTOP
+J8,KEY,1,Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical,连接器：KEY
+J9,STATUS,1,Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical,连接器：STATUS
+TP1,FIRE_INHIBIT_N,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：FIRE_INHIBIT_N
+TP2,EXTERNAL_ALLOW,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：EXTERNAL_ALLOW
+TP3,MECH_RECOVERED_N,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：MECH_RECOVERED_N
+TP4,POCKET_OR_MODE_A,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：POCKET_OR_MODE_A
+TP5,Q1_OUT,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：Q1_OUT
+TP6,Q2_OUT,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：Q2_OUT
+TP7,RELEASE_PULSE,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：RELEASE_PULSE
+TP8,FAULT_LATCH,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：FAULT_LATCH
+TP9,HOME_AND,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：HOME_AND
+TP10,MASTER_ENABLE_RAW,1,TestPoint:TestPoint_Pad_D1.5mm,测试点：MASTER_ENABLE_RAW
