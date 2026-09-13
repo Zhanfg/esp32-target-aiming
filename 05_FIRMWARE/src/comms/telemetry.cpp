@@ -2,8 +2,10 @@
  * telemetry.cpp
  * telemetry.h 的实现，用 Arduino Serial 与 config.h。
  *
- * CSV 表头（与 telemetry.h 一致）：
- *   AIM,t_ms,state,obs_valid,px,py,conf,pan_deg,tilt_deg,pan_target,tilt_target,pan_rate,tilt_rate,enc_pan,enc_tilt,loop_us
+ * CSV 表头（§19，共 17 个字段，字段名与顺序不可改）：
+ *   MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,boundary_state,
+ *       preload_state,membrane_id,payload_id,cycle_count,stage1_event,stage2_event,
+ *       mechanism_recovered,magazine_position,magazine_index_ok,fault_code,operator_note
  */
 
 #include "telemetry.h"
@@ -11,8 +13,6 @@
 #include <Arduino.h>
 
 #include "config.h"
-
-static uint32_t s_loop_us = 0;
 
 void telemetryInit(uint32_t baud) {
     Serial.begin(baud);
@@ -22,54 +22,50 @@ void telemetryInit(uint32_t baud) {
         delay(1);
     }
     Serial.println();
-    Serial.println("# AIM telemetry; header:");
-    Serial.println("AIM,t_ms,state,obs_valid,px,py,conf,pan_deg,tilt_deg,"
-                   "pan_target,tilt_target,pan_rate,tilt_rate,enc_pan,enc_tilt,loop_us");
+    Serial.println("# MST telemetry; header:");
+    Serial.println("MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,"
+                   "boundary_state,preload_state,membrane_id,payload_id,cycle_count,"
+                   "stage1_event,stage2_event,mechanism_recovered,magazine_position,"
+                   "magazine_index_ok,fault_code,operator_note");
 }
 
-void telemetrySetLoopUs(uint32_t loop_us) {
-    s_loop_us = loop_us;
+static void emitLine(const TelemetryRecord& rec) {
+    Serial.printf("MST,%lu,%u,%s,%s,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%u,%u,%s\n",
+                  (unsigned long)rec.timestamp,
+                  (unsigned)rec.experiment_id,
+                  rec.prototype_version ? rec.prototype_version : "-",
+                  rec.mechanism_version ? rec.mechanism_version : "-",
+                  (unsigned)rec.mode,
+                  (unsigned)rec.boundary_state,
+                  (unsigned)rec.preload_state,
+                  (unsigned)rec.membrane_id,
+                  (unsigned)rec.payload_id,
+                  (unsigned long)rec.cycle_count,
+                  (unsigned)rec.stage1_event,
+                  (unsigned)rec.stage2_event,
+                  (unsigned)rec.mechanism_recovered,
+                  (unsigned)rec.magazine_position,
+                  (unsigned)rec.magazine_index_ok,
+                  (unsigned)rec.fault_code,
+                  rec.operator_note ? rec.operator_note : "-");
 }
 
-void telemetryEmit(const TargetObservation& obs, const TurretSolution& sol,
-                   const AxisState& pan, const AxisState& tilt, AimState state) {
+void telemetryEmit(const TelemetryRecord& rec) {
 #if AIM_VERBOSE_TELEMETRY
-    uint32_t t_ms = (sol.t_ms != 0) ? sol.t_ms : millis();
-    Serial.printf(
-        "AIM,%lu,%d,%d,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%ld,%ld,%lu\n",
-        (unsigned long)t_ms,
-        (int)state,
-        obs.valid ? 1 : 0,
-        obs.centroid.x,
-        obs.centroid.y,
-        obs.centroid.confidence,
-        pan.position_deg,
-        tilt.position_deg,
-        pan.target_deg,
-        tilt.target_deg,
-        pan.velocity_dps,
-        tilt.velocity_dps,
-        (long)pan.encoder_count,
-        (long)tilt.encoder_count,
-        (unsigned long)s_loop_us);
+    // 逐帧刷新时用记录里的时间戳；调用方未填则退回 millis()。
+    TelemetryRecord out = rec;
+    if (out.timestamp == 0) out.timestamp = millis();
+    emitLine(out);
 #else
     // 发布固件：不逐帧刷屏，只发低频心跳，证明控制环仍在运行。
     static uint32_t last_heartbeat_ms = 0;
     uint32_t now = millis();
     if ((uint32_t)(now - last_heartbeat_ms) >= TELEMETRY_HEARTBEAT_MS) {
         last_heartbeat_ms = now;
-        Serial.printf("AIM,%lu,%d,%d,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%ld,%ld,%lu\n",
-                      (unsigned long)now,
-                      (int)state,
-                      obs.valid ? 1 : 0,
-                      obs.centroid.x, obs.centroid.y, obs.centroid.confidence,
-                      pan.position_deg, tilt.position_deg,
-                      pan.target_deg, tilt.target_deg,
-                      pan.velocity_dps, tilt.velocity_dps,
-                      (long)pan.encoder_count, (long)tilt.encoder_count,
-                      (unsigned long)s_loop_us);
+        TelemetryRecord out = rec;
+        out.timestamp = now;
+        emitLine(out);
     }
-    (void)sol;
 #endif
 }
 

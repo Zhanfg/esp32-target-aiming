@@ -68,8 +68,24 @@ const char* stateName(AimState s) {
         case AimState::SEARCHING:   return "SEARCHING";
         case AimState::TRACKING:    return "TRACKING";
         case AimState::LOCKED:      return "LOCKED";
-        case AimState::FAULT:       return "FAULT";
         case AimState::CALIB_MODE:  return "CALIB_MODE";
+    }
+    return "UNKNOWN";
+}
+
+const char* cycleName(CycleState s) {
+    switch (s) {
+        case CycleState::BOOT:        return "BOOT";
+        case CycleState::SAFE:        return "SAFE";
+        case CycleState::HOME:        return "HOME";
+        case CycleState::READY:       return "READY";
+        case CycleState::AIM_ALLOWED: return "AIM_ALLOWED";
+        case CycleState::PRELOAD:     return "PRELOAD";
+        case CycleState::ARMED:       return "ARMED";
+        case CycleState::RELEASE:     return "RELEASE";
+        case CycleState::RECOVER:     return "RECOVER";
+        case CycleState::INDEX:       return "INDEX";
+        case CycleState::FAULT:       return "FAULT";
     }
     return "UNKNOWN";
 }
@@ -135,15 +151,21 @@ void printHelp() {
     Serial.println("CMD,CAL SAVE,把当前仿射写入 NVS");
     Serial.println("CMD,CAL LOAD,从 NVS 读回并应用");
     Serial.println("CMD,CAL EXIT,退出标定模式回 SEARCHING");
-    Serial.println("CMD,ESTOP,急停：切断电机与发射器并锁存 FAULT");
+    Serial.println("CMD,ESTOP,急停：切断舵机与释放链并锁存 FAULT");
+    Serial.println("CMD,CLEAR,清除软故障并送 SAFE（硬故障无效，唯一恢复路径 SAFE->HOME）");
 }
 
 void printStatus() {
-    AimState st = s_hooks.getState ? s_hooks.getState() : AimState::FAULT;
+    AimState st = s_hooks.getState ? s_hooks.getState() : AimState::IDLE;
+    CycleState cy = s_hooks.getCycleState ? s_hooks.getCycleState() : CycleState::FAULT;
     AxisState pan, tilt;
     if (s_hooks.getAxes) s_hooks.getAxes(pan, tilt);
 
     Serial.printf("ST,state,%d,%s\n", (int)st, stateName(st));
+    Serial.printf("ST,cycle,%d,%s\n", (int)cy, cycleName(cy));
+    if (s_hooks.getFaultCode) {
+        Serial.printf("ST,fault_code,%d\n", (int)s_hooks.getFaultCode());
+    }
     Serial.printf("ST,cal_mode,%d\n", inCalMode() ? 1 : 0);
 
     const CalibrationData* cal = s_hooks.calibration ? s_hooks.calibration() : nullptr;
@@ -162,10 +184,10 @@ void printStatus() {
         Serial.printf("ST,offset,%.3f,%.3f\n", cal->pan_offset_deg, cal->tilt_offset_deg);
     }
 
-    Serial.printf("ST,pan,pos=%.3f,tgt=%.3f,enc=%ld\n",
-                  pan.position_deg, pan.target_deg, (long)pan.encoder_count);
-    Serial.printf("ST,tilt,pos=%.3f,tgt=%.3f,enc=%ld\n",
-                  tilt.position_deg, tilt.target_deg, (long)tilt.encoder_count);
+    Serial.printf("ST,pan,pos=%.3f,tgt=%.3f,fb=%.3f\n",
+                  pan.position_deg, pan.target_deg, pan.feedback_deg);
+    Serial.printf("ST,tilt,pos=%.3f,tgt=%.3f,fb=%.3f\n",
+                  tilt.position_deg, tilt.target_deg, tilt.feedback_deg);
     Serial.printf("ST,points,%d/%d\n", s_count, kMaxPoints);
 }
 
@@ -176,6 +198,12 @@ void cmdStart() {
     }
     if (inCalMode()) {
         replyErr("已在标定模式");
+        return;
+    }
+    // 标定只能在 READY 及以下发起；PRELOAD/ARMED 等含储能态先卸载残余能量。
+    CycleState cy = s_hooks.getCycleState ? s_hooks.getCycleState() : CycleState::FAULT;
+    if (cy != CycleState::READY) {
+        replyErr("只能在 READY 进入标定模式（当前 %s）", cycleName(cy));
         return;
     }
     if (!s_hooks.setCalibrationMode(true)) {
@@ -355,7 +383,7 @@ void cmdSolve() {
     }
 
     // 点对里的角度是 MARK 时两轴的实际角，因此这里拟合的是像素 -> pan/tilt 直接映射，
-    // 零点偏移保持 0，与 turntable 当前把仿射输出当作相对修正量的用法一致。
+    // 零点偏移保持 0，与 main 的指向跟踪把仿射输出当作相对修正量的用法一致。
     float affine[2][3];
     float rmse_train[2];
     if (!calibrationSolveAffine(train_pix, train_ang, nt, affine, rmse_train)) {
@@ -451,7 +479,19 @@ void cmdLoad() {
 
 void cmdEstop() {
     if (s_hooks.emergencyStop) s_hooks.emergencyStop();
-    replyOk("ESTOP 已触发：电机与发射器切断，FAULT 锁存");
+    replyOk("ESTOP 已触发：舵机与释放链切断，FAULT 锁存");
+}
+
+void cmdFaultClear() {
+    if (!s_hooks.clearFault) {
+        replyErr("清除接口未注入");
+        return;
+    }
+    if (s_hooks.clearFault()) {
+        replyOk("软故障已清除，系统送 SAFE，随后自动重新 HOME");
+    } else {
+        replyErr("清除被拒绝：无故障或属硬故障（软件清除无效，需断电/人工处理）");
+    }
 }
 
 void dispatchCal(char* p) {
@@ -483,6 +523,7 @@ void processLine(char* line) {
     if (strcmp(cmd, "HELP") == 0) printHelp();
     else if (strcmp(cmd, "STATUS") == 0) printStatus();
     else if (strcmp(cmd, "ESTOP") == 0) cmdEstop();
+    else if (strcmp(cmd, "CLEAR") == 0) cmdFaultClear();
     else if (strcmp(cmd, "CAL") == 0) dispatchCal(p);
     else replyErr("未知命令 \"%s\"，输入 HELP", cmd);
 }
@@ -521,8 +562,9 @@ void readSerial() {
 bool calibShellInit(const CalibShellHooks& hooks) {
     s_hooks = hooks;
     s_ready = hooks.getObservation && hooks.getAxes && hooks.getState &&
-              hooks.calibration && hooks.applyCalibration && hooks.setCalibrationMode &&
-              hooks.jog && hooks.emergencyStop;
+              hooks.getCycleState && hooks.calibration && hooks.applyCalibration &&
+              hooks.setCalibrationMode && hooks.jog && hooks.emergencyStop &&
+              hooks.clearFault;
     s_count = 0;
     s_line_len = 0;
     s_overflow = false;

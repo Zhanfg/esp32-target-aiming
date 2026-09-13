@@ -1,19 +1,18 @@
 # 引脚分配与扩展预留
 
 本文汇总 `05_FIRMWARE/include/config.h` 里的引脚与片内外设占用，给出空闲资源和扩展方案。
-改动 `config.h` 的任一引脚宏后，本文的三张表要同步更新。
+第二期执行层改为舵机 + 两级脉冲核心 + 旋转供给盘，电机、编码器、TB6612 层已删除，
+本文随之同步。改动 `config.h` 的任一引脚宏后，本文的三张表要同步更新。
 
 ## 1. 引脚分配表
 
-从 `config.h` 汇总。核对实物一列在首次烧录前逐条填写，“待核对”表示还没有对照原理图确认。
+从 `config.h` 汇总。核对实物一列在首次烧录前逐条填写，"待核对"表示还没有对照原理图确认。
 
 | 用途 | GPIO | 外设资源 | 核对实物 |
 |---|---|---|---|
-| pan 电机 AIN1 | 1 | 普通 GPIO | 待核对 |
-| pan 电机 AIN2 | 2 | 普通 GPIO | 待核对 |
-| 发射器控制 | 3 | 普通 GPIO，strapping | 待核对 |
-| 摄像头 SCCB SDA | 4 | GPIO 模拟 SCCB | 待核对 |
-| 摄像头 SCCB SCL | 5 | GPIO 模拟 SCCB | 待核对 |
+| RELEASE_CMD | 3 | 普通 GPIO，strapping | 待核对 |
+| 摄像头 SCCB SDA | 4 | GPIO 模拟 SCCB（I2C1） | 待核对 |
+| 摄像头 SCCB SCL | 5 | GPIO 模拟 SCCB（I2C1） | 待核对 |
 | 摄像头 VSYNC | 6 | 普通 GPIO | 待核对 |
 | 摄像头 HREF | 7 | 普通 GPIO | 待核对 |
 | 摄像头 D2 | 8 | 普通 GPIO | 待核对 |
@@ -22,207 +21,126 @@
 | 摄像头 D0 | 11 | 普通 GPIO | 待核对 |
 | 摄像头 D4 | 12 | 普通 GPIO | 待核对 |
 | 摄像头 PCLK | 13 | 普通 GPIO | 待核对 |
-| pan 电机 PWM | 14 | LEDC ch0 / timer0 | 待核对 |
+| PAN_CMD | 14 | LEDC ch3 / timer3，50Hz | 待核对 |
 | 摄像头 XCLK | 15 | LEDC ch2 / timer2，20MHz | 待核对 |
 | 摄像头 D7 | 16 | 普通 GPIO | 待核对 |
 | 摄像头 D6 | 17 | 普通 GPIO | 待核对 |
 | 摄像头 D5 | 18 | 普通 GPIO | 待核对 |
-| tilt 电机 PWM | 21 | LEDC ch1 / timer1 | 待核对 |
-| TB6612 STBY | 38 | 普通 GPIO，RGB LED 疑点 | 必须核对 |
-| pan 编码器 A | 39 | PCNT unit0 | 待核对 |
-| pan 编码器 B | 40 | PCNT unit0 | 待核对 |
-| tilt 编码器 A | 41 | PCNT unit1 | 待核对 |
-| tilt 编码器 B | 42 | PCNT unit1 | 待核对 |
-| tilt 电机 BIN1 | 47 | 普通 GPIO，RGB LED 疑点 | 必须核对 |
-| tilt 电机 BIN2 | 48 | 普通 GPIO，RGB LED 疑点 | 必须核对 |
+| TILT_CMD | 21 | LEDC ch4 / timer3，50Hz | 待核对 |
+| STAGE1_STATE | 40 | 普通 GPIO，中断，失稳事件计时 | 待核对 |
+| STAGE2_STATE | 41 | 普通 GPIO，中断，判定两级顺序 | 待核对 |
+| I2C0 SDA | 45 | I2C0，strapping | 必须核对 |
+| I2C0 SCL | 46 | I2C0，strapping | 必须核对 |
 
 摄像头 D0-D7 对应 `config.h` 的 `CAM_PIN_Y2..Y9`，其中 D0=Y2，D7=Y9。数据线顺序因板而异，接错会黑屏或花屏。
 
-发射器的 GPIO3 是 JTAG 相关 strapping 脚，用 JTAG 调试时要换脚。
+RELEASE_CMD 的 GPIO3 是 JTAG 相关 strapping 脚，用 JTAG 调试时要换脚。I2C0 用的 45/46 也是
+strapping 脚，外接上拉会影响复位瞬间电平，接线前必须核对模块规格书。
 
-## 2. 空闲 GPIO 表
+## 2. MCP23017 位分配
 
-逐脚说明可用性。这里把不可用区间也列出，便于排线时排除。
+I2C0 接一片 MCP23017，地址 0x20（A2A1A0 全低）。位编号 0-7 = GPA0-GPA7，8-15 = GPB0-GPB7。
+
+| 位 | 名称 | 方向 | 说明 |
+|---|---|---|---|
+| 0 | BOUNDARY_CMD | 输出 | 边界研究，慢速 |
+| 1 | PRELOAD_CMD | 输出 | 预载使能，硬件串 `MECH_RECOVERED_N` |
+| 2 | MAG_INDEX_CMD | 输出 | 供给盘索引一步 |
+| 3 | STATUS_LED | 输出 | 指示 |
+| 4 | MAG_HOME | 输入 | 供给盘零位 |
+| 5 | MAG_INDEX_OK | 输入 | 索引到位/对齐确认 |
+| 6 | MECH_RECOVERED | 输入 | 常闭干接点对地，复位时为低 |
+| 7 | PAN_HOME | 输入 | pan 参考开关 |
+| 8 | TILT_HOME | 输入 | tilt 参考开关 |
+| 9 | FIRE_INHIBIT | 输入 | 有效为高，外部下拉，开路禁止 |
+| 10 | EXTERNAL_ALLOW | 输入 | 有效为高，外部下拉，开路拒绝 |
+
+MCP23017 内部上拉不启用。安全输入按架构文档 §6.7 要求外部加下拉，许可类主动拉高，
+开路即禁止；`MECH_RECOVERED` 是常闭干接点，要外部上拉。上电前必须确认外部电阻已就位。
+
+## 3. 空闲 GPIO 表
 
 | GPIO | 可用性 | 限制 |
 |---|---|---|
-| 0 | 受限可用 | BOOT 键兼 strapping。复位后约 0.7s 内为低电平会进下载模式，只作输入或按键 |
-| 1-18 | 已占用 | 见第 1 节，摄像头、电机、发射器 |
+| 0 | 受限可用 | BOOT 键兼 strapping，只作输入或按键 |
+| 1,2 | 空闲 | 前一期电机方向脚，已释放 |
+| 38,39,42,47,48 | 空闲 | 前一期 STBY/编码器/方向脚，已释放；部分开发板兼 RGB LED，用前核对 |
 | 19 | 条件可用 | 原生 USB D-。用 USB 调试或烧录时不可占用，改用 UART0 后可释放 |
 | 20 | 条件可用 | 原生 USB D+，同上 |
-| 21 | 已占用 | tilt 电机 PWM |
 | 22-25 | 不存在 | 芯片不引出 |
 | 26-32 | 不可用 | Flash/PSRAM 的 SPI 占用 |
 | 33-37 | 不可用 | N16R8 八线 OPI PSRAM 的额外数据线占用 |
-| 38 | 已占用 | TB6612 STBY，同时是 RGB LED 疑点，见第 6 节 |
-| 39-42 | 已占用 | 编码器 |
 | 43-44 | 不可用 | UART0，默认串口监视器 |
-| 45 | 受限可用 | strapping，上电电平决定 VDD_SPI 供电方式 |
-| 46 | 受限可用 | strapping，上电电平决定 ROM 启动来源 |
-| 47-48 | 已占用 | tilt 电机方向脚，同时是 RGB LED 疑点，见第 6 节 |
 
-结论：真正无约束的空闲脚有 0 个。GPIO0、45、46 都必须在复位瞬间保持规定电平，
-GPIO19、20 只在放弃原生 USB 后才空出来。扩展时优先用片内外设，不要指望再加很多引脚。
+结论：真正无约束的空闲脚有限，且 0、19、20、45、46 都带复位瞬间约束。扩展时优先用片内
+外设或 I2C，不要指望再加很多引脚。
 
 如果换成 QSPI PSRAM 的型号（N8R2 等），GPIO33-37 里的部分脚会释放，届时以实际模块
 规格书为准，`platformio.ini` 的 `board_build.arduino.memory_type` 也要从 `qio_opi` 改掉。
 
-## 3. 外设资源表
+## 4. 外设资源表
 
 | 资源 | 总量 | 已用 | 剩余 | 说明 |
 |---|---|---|---|---|
-| LEDC 通道 | 8 | ch0（pan PWM）、ch1（tilt PWM）、ch2（摄像头 XCLK） | ch3-ch7 | 与定时器成对分配 |
-| LEDC 定时器 | 4 | timer0、timer1、timer2 | timer3 | 每个定时器可挂 2 个通道 |
-| PCNT 单元 | 4 | unit0（pan）、unit1（tilt） | unit2、unit3 | 一个正交编码器占一个单元的两个通道 |
-| UART | 3 | UART0（遥测与标定外壳共用 Serial） | UART1、UART2 | 需要引脚，经 GPIO 矩阵可映射 |
-| I2C | 2 | I2C1（摄像头 SCCB，qio_opi 构建的 sdkconfig 定义 CONFIG_SCCB_HARDWARE_I2C_PORT1=1） | I2C0 | 预留 I2C0 接 OLED/传感器 |
+| LEDC 通道 | 8 | ch2（摄像头 XCLK）、ch3/ch4（两舵机） | ch0/ch1/ch5-ch7 | 两舵机共用 timer3 |
+| LEDC 定时器 | 4 | timer2（XCLK）、timer3（舵机） | timer0/timer1 | 每个定时器可挂 2 个通道 |
+| PCNT 单元 | 4 | 无 | unit0-unit3 | 编码器层已删 |
+| UART | 3 | UART0（遥测与标定外壳共用 Serial） | UART1、UART2 | 总线舵机预留 UART1 |
+| I2C | 2 | I2C1（摄像头 SCCB） | I2C0（MCP23017，可再挂电流监控） | - |
 | SPI | SPI0/1 内部占用，SPI2、SPI3 可用 | 无 | SPI2、SPI3 | 需要引脚 |
-| ADC | ADC1 十通道、ADC2 十通道 | 无 | 无可用引脚 | ADC1 映射 GPIO1-10，ADC2 映射 GPIO11-20，这些脚已占满 |
-| RMT | 8 通道 | 无 | 全部 | esp32-camera 不使用 RMT，可留给红外或单总线外设 |
+| ADC | ADC1 十通道、ADC2 十通道 | 无 | 无可用引脚 | 电流/电压采样走 I2C ADC |
+| RMT | 8 通道 | 无 | 全部 | 可留给红外或单总线外设 |
 
-ADC2 与 WiFi 冲突，用 ADC2 时不能同时开 WiFi。当前没有空闲 ADC 脚，加电流或电压采样要走外部
-I2C ADC，或腾出一个 GPIO1-10 的脚。
+## 5. 资源余量
 
-## 4. 资源余量
+第二期去掉电机闭环后，Flash 与 RAM 仍充足，约束在引脚与外设，不在存储。需要注意的
+瓶颈：
 
-当前构建（`esp32-s3-devkitc-1` 开发环境）：Flash 占用 5.9%（388677 / 6553600 字节），
-RAM 占用 7.9%（25824 / 327680 字节）。标定外壳加入前分别是 5.7% 和 7.5%，本次增加约 0.2%。
+- GPIO：几乎没有无约束空脚，新外设要么走 I2C，要么复用已释放脚。
+- CPU 时间：控制环 100Hz，单拍预算 10ms。视觉与发射时序共用一个 CPU，第二期必须实测
+  最坏情况抖动（架构文档第 9 节）。
+- 舵机行程与失速：无编码器，失速检测只能靠电流/负载（优先总线舵机反馈），要在台架标定。
 
-Flash 上还有约 6.1MB 空间，程序从 16MB Flash 的 6.25MB 应用分区里取用，装下轻量神经网络
-推理库（如 TFLite Micro）没有问题。RAM 的 7.9% 只是静态分配，运行时的大块内存（摄像头帧缓冲、
-视觉工作缓冲）走 PSRAM，不在这 320KB 里。8MB PSRAM 目前只用了帧缓冲和工作缓冲，余量很大。
+## 6. 代码层扩展点
 
-需要注意的余量瓶颈不在容量，而在三个地方：
+### 6.1 换舵机实现
 
-- GPIO：见第 2 节，几乎没有空脚，新外设要么走 I2C，要么腾脚。
-- CPU 时间：控制环 100Hz，单拍预算 10ms，看门狗会因超预算降帧。加重的算法（神经网络推理）
-  要评估单帧耗时，必要时降分辨率或降帧率。
-- 摄像头与 PSRAM 带宽：QVGA RGB565 双缓冲已经占用较多 PSRAM 带宽，提分辨率会与视觉帧率冲突。
+边界在 `hal/servo.h` 的 `ServoDrive` 接口，`SERVO_DRIVE_TYPE` 编译期选择。总线协议落地后
+在 `ServoBus` 里补齐帧格式、波特率、读位置与负载命令字即可，`servo_axis` 与 `main` 不改。
 
-P2 算法在 PC 上验证、P4 控制先跑通，之后再上重算法，就是给 CPU 和带宽留调整空间。
+### 6.2 加第三个轴
 
-## 5. 代码层扩展点
+改动集中在四处：`config.h` 加轴宏与引脚/LEDC 资源、`servo.h` 加读写接口、`servo_axis.cpp`
+的轴表加一项、`aim_types.h` 的 `TurretSolution` 与遥测加字段。PC 端解析同步改。
 
-### 5.1 加第三个轴
+### 6.3 换目标检测算法
 
-`Axis` 类与轴下标接口已经按“每轴一份”设计：`AxisConfig` 带轴编号，`motorSetDuty(uint8_t axis)`、
-`encoderGetAngleDeg(uint8_t axis)`、`motorCoast(uint8_t axis)` 都按 `axis` 索引。
+边界在 `vision.h`：`visionCapture` 返回 `TargetObservation`，控制与解算不关心内部是阈值
+分割还是神经网络。`confidence` 保持 [0,1]。
 
-要加轴，改动集中在四处：
+### 6.4 换传感器（IMU、电流监控）
 
-1. `config.h`：加 `AXIS_*` 宏并把 `AXIS_COUNT` 加一，补该轴的引脚、LEDC 通道、PCNT 单元与增益宏。
-2. `hal/motor_driver.cpp` 的 `kMotors[]` 与 `hal/encoder.cpp` 的 `kEncoders[]`：各加一条表项，
-   数组长度由 `AXIS_COUNT` 决定，自动扩展。
-3. `control/turntable.cpp`：现在是两个静态 `Axis` 成员和 `s_pan`/`s_tilt` 的逐轴代码。加轴要把
-   逐轴变量改成 `Axis s_axes[AXIS_COUNT]`，并让 `makeAxisConfig` 支持第三个轴。
-4. `aim_types.h`：`TurretSolution` 与遥测结构里的 `pan_deg`/`tilt_deg` 是固定字段，需要加字段，
-   PC 端解析同步改。
-
-PCNT 资源和 LEDC 资源都够，第三路 PWM 用 ch3/timer3，第三路编码器用 unit2。
-
-### 5.2 换电机类型（有刷换无刷 FOC）
-
-抽象边界在 `hal/motor_driver.h`。`Axis` 只调用 `motorSetDuty(axis, duty)` 与 `motorCoast(axis)`，
-加上 `encoderGetAngleDeg`/`encoderGetVelocityDps` 取反馈。换 FOC 时按同样的函数签名实现
-`motorSetDuty` 等，把 duty 换成电流或力矩指令，`Axis` 不需要改。若要引入力矩环或 FOC 自带的
-编码器，优先保留 `encoder.h` 的接口，避免 `Axis` 感知具体电机。
-
-`transmitter.h` 用纯虚基类 + 具体实现的分法更适合本层，换电机时可把 `motor_driver` 也改成
-`MotorDriver` 接口，由 `main` 注入实现，参照 `Transmitter` 的做法。
-
-### 5.3 换目标检测算法
-
-边界在 `vision.h`：`visionInit()`、`visionCapture(TargetObservation&)`、
-`visionSetRoi()`、`visionSetThresholdHSV()`。控制与解算只认 `visionCapture` 返回的
-`TargetObservation`，不关心内部是阈值分割还是神经网络。
-
-换成轻量模型时，保留 `visionCapture` 的签名，内部替换为推理，输出同样的
-`centroid`、`bbox_w/h`、`confidence`。`confidence` 的取值域保持 [0,1]。如果模型需要固定输入尺寸
-或额外预处理，新增 `visionConfigure` 一类接口，不要让控制层直接碰模型句柄。
-
-### 5.4 换发射器
-
-实现 `hal/transmitter.h` 的 `Transmitter` 接口即可：`init`、`state`、`arm`、`fire`、`update`、
-`emergencyStop`。接口契约要求未武装时 `fire()` 返回 false，`emergencyStop()` 无条件生效并回到 SAFE。
-
-`main.cpp` 目前直接声明了具体类型 `MotorTransmitter g_transmitter;`，要换实现改这一行，
-或者加一个工厂函数返回 `Transmitter*`。`main` 其余部分只通过基类调用，安全状态机不用动。
-
-### 5.5 加传感器（IMU、激光测距）
-
-放在 `hal/` 下新建模块，接口风格与 `encoder.h` 一致，向上只暴露物理量，不暴露寄存器细节。
-
-- IMU：挂预留 I2C0（GPIO45/46），提供姿态角或角速度。IMU 的姿态可以喂给控制层做前馈，
-  或喂给视觉解算做运动补偿，接入点在 `control/turntable.cpp` 的 `turretUpdate` 之前。
-- 激光测距：挂预留 UART1，提供距离。距离可用于解算目标的三维位置，替换现在“只有像素”的输入，
-  接入点在解算层，即未来 `AimSolver` 的输入结构。
-
-新增传感器不要在 `main.cpp` 里堆逻辑，保持 `main` 只做编排。
-
-### 5.6 换通信方式（串口换 WiFi/蓝牙）
-
-`comms/telemetry.*` 与 `comms/calib_shell.*` 现在都直接使用 Arduino `Serial`：
-telemetry 只写，calib_shell 只读。边界就在这两个模块。
-
-换成 WiFi 或蓝牙时，把 `Serial` 换成抽象的 `Stream&`，由 `main` 在初始化时注入具体流。
-`telemetryInit(baud)` 可改成 `telemetryInit(Stream&)`，`calib_shell` 同理持有 `Stream*`。
-Arduino-ESP32 的 `BluetoothSerial` 与 `WiFiClient` 都无法直接套 `Stream`，需要写一个薄的适配层，
-把 `available/read/write/printf` 映射到具体通道。这样协议文本、命令解析、PC 端脚本都不用改。
-
-## 6. 上电前必须核对的引脚风险
-
-### 6.1 GPIO38、GPIO47、GPIO48 与板载 RGB LED
-
-ESP32-S3-DevKitC-1 的板载可寻址 RGB LED 在部分版本接在 GPIO38，在另一些版本或兼容板上接在
-GPIO48。本项目的 `TB6612_STBY_PIN` 是 38，`TILT_AIN1_PIN` 是 47，`TILT_AIN2_PIN` 是 48，
-正好落在疑点范围。
-
-确认方法，任选其一：
-
-1. 查开发板原理图或板背丝印版本号，确认 RGB LED 的数据脚。
-2. 不烧固件，只上电，用万用表量 38、47、48 对地电压，再对照原理图看 LED 支路是否连到这三脚。
-3. 烧一个只翻转这三脚的测试程序，观察板载 LED 是否亮；亮则说明该脚与 LED 相连。
-
-确认不了会出现的症状：
-
-- 板载 RGB LED 微亮、闪烁或颜色异常，随电机动作变化。
-- STBY 电平被 LED 支路拉偏，表现为电机一直使能（急停无效）或一直不使能（电机不动）。
-- tilt 方向脚电平被拉偏，表现为 tilt 只朝一个方向转、或静止时轻微抖动。
-
-若确认冲突，优先把 STBY 与 tilt 方向脚换到别的空闲脚。当前空闲脚只剩 GPIO0、45、46，
-三者都是 strapping，换脚后要同时确认复位电平不会被外接电路拉反，并更新本文第 1、2 节。
-
-### 6.2 其余风险
-
-| 风险点 | 确认内容 | 确认不了的症状 |
-|---|---|---|
-| 摄像头 D0-D7 顺序 | 对照原理图核对 `CAM_PIN_Y2..Y9` | 黑屏、花屏、颜色错位 |
-| PSRAM 模式 | 确认模块是 N16R8（八线 OPI） | 分配 PSRAM 失败，视觉退回内部 RAM |
-| 编码器 PPR 与减速比 | 对照电机铭牌核对 `ENCODER_PPR`、`GEAR_RATIO_*` | 角度整体按比例偏大或偏小 |
-| 电机方向极性 | 正占空比应使编码器角度增大 | 闭环正反馈，电机冲限位 |
-| 发射器 GPIO3 | 确认是否与 JTAG 调试冲突 | JTAG 无法连接 |
-| 限位角度 | 手动确认 pan/tilt 机械限位与 `CONTROL` 分区一致 | 软限位失效时撞机械限位 |
+放 `hal/` 下新建模块，挂 I2C0 与 MCP23017 共总线。IMU 姿态可喂给指向跟踪做前馈，电流
+可用于舵机失速判定。新增传感器不要在 `main.cpp` 里堆逻辑，保持 `main` 只做编排。
 
 ## 7. 串口标定命令
 
-与遥测共用 115200 的 Serial。每行一条命令，不分大小写，参数空格分隔。命令响应以 `OK,`、`ERR,`
-或字段前缀（`ST,`、`PT,`、`SOLVE,`）输出，方便和 `AIM,`、`EVT,` 遥测行区分。
+与遥测共用 115200 的 Serial。每行一条命令，不分大小写，参数空格分隔。命令响应以 `OK,`、
+`ERR,` 或字段前缀（`ST,`、`PT,`、`SOLVE,`）输出，和 `MST,`、`EVT,` 遥测行区分。
 
 | 命令 | 作用 |
 |---|---|
 | `HELP` | 列出全部命令 |
-| `STATUS` | 打印 AimState、标定有效性、两轴角度与计数、内参、仿射 |
-| `CAL START` | 进入手动标定模式：暂停自动跟踪，发射器强制 SAFE |
-| `CAL JOG <pan_deg> <tilt_deg>` | 设两轴目标角，仍走双环 PID 与限速限位 |
+| `STATUS` | 打印区域 A/区域 B 状态、故障码、两轴角度与标定 |
+| `CAL START` | 进入手动标定模式，仅在 READY 可用，释放链强制断开 |
+| `CAL JOG <pan_deg> <tilt_deg>` | 设两轴目标角，走限幅与变化率限制 |
 | `CAL MARK [label]` | 记录当前有效像素观测与当前实际角，无效观测会被拒绝 |
-| `CAL LIST` | 列出点表 |
-| `CAL DEL <n>` | 删除第 n 个点，序号从 1 开始 |
-| `CAL CLEAR` | 清空点表 |
+| `CAL LIST` / `CAL DEL <n>` / `CAL CLEAR` | 点表管理 |
 | `CAL SOLVE` | 最小二乘解算，分别报告训练与留出 RMSE |
-| `CAL SAVE` | 把解算结果写入 NVS |
-| `CAL LOAD` | 从 NVS 读回并应用 |
-| `CAL EXIT` | 退出标定模式，恢复自动跟踪 |
-| `ESTOP` | 立即切断电机与发射器并锁存 FAULT，任何状态都生效 |
+| `CAL SAVE` / `CAL LOAD` | 写读 NVS |
+| `CAL EXIT` | 退出标定模式 |
+| `ESTOP` | 立即切断舵机与释放链并锁存 FAULT |
+| `CLEAR` | 清除软故障并送 SAFE，随后自动重新 HOME；硬故障无效 |
 
 点表最多 32 个点。`CAL SOLVE` 按记录顺序每第 3 个点抽为留出集，其余参与解算，训练点不足 3 个时
 退化为全点解算，不再报留出残差。`CAL JOG` 越界会夹到机械限位并回报。
