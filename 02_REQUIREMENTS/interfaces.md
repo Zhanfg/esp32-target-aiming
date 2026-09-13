@@ -206,7 +206,7 @@ MAGAZINE_MODULE 七个模块，上表的配合面都落在模块边界上。
 | 13 | `mechanism_recovered` | uint8 | 无 | 0 / 1 | 机构复位确认 |
 | 14 | `magazine_position` | uint8 | 无 | 0 .. 5 | 当前工位，`MAG_POSITIONS` 为 6 |
 | 15 | `magazine_index_ok` | uint8 | 无 | 0 / 1 | 索引到位 |
-| 16 | `fault_code` | uint16 | 无 | 0 .. 9 | `FaultCode` 整数值，定义见 `aim_types.h` |
+| 16 | `fault_code` | uint16 | 无 | 0 .. 14 | `FaultCode` 整数值，定义见 `aim_types.h` |
 | 17 | `operator_note` | string | 无 | 不含逗号，默认 `-` | 操作备注 |
 
 事件行与数据行用不同前缀区分：`EVT,<t_ms>,<tag>,<msg>`，`t_ms` 为毫秒，`tag` 与 `msg` 不含逗号。

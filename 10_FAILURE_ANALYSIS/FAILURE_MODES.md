@@ -5,11 +5,13 @@
 
 FaultCode 取自 `05_FIRMWARE/src/aim_types.h`：NONE=0、PERIPH_INIT=1、HOME_TIMEOUT=2、
 HOME_SWITCH_CONFLICT=3、RELEASE_GATE_SELFTEST=4、OBS_LINK=5、INDEX_FAIL=6、WATCHDOG=7、
-MECH_STUCK=8、ESTOP=9。软故障 HOME_TIMEOUT、OBS_LINK、INDEX_FAIL、WATCHDOG、ESTOP 可经
-SAFE → HOME → READY 恢复；硬故障 PERIPH_INIT、HOME_SWITCH_CONFLICT、RELEASE_GATE_SELFTEST、
-MECH_STUCK 锁存，软件清除无效。
+MECH_STUCK=8、ESTOP=9、MEMBRANE_RUPTURE=10、DOUBLE_FEED=11、FIRE_INHIBIT_SHORT=12、
+I2C_BUS_HANG=13、STATE_ILLEGAL=14。软故障 HOME_TIMEOUT、OBS_LINK、INDEX_FAIL、WATCHDOG、
+ESTOP、DOUBLE_FEED 可经 SAFE → HOME → READY 恢复；硬故障 PERIPH_INIT、HOME_SWITCH_CONFLICT、
+RELEASE_GATE_SELFTEST、MECH_STUCK、MEMBRANE_RUPTURE、FIRE_INHIBIT_SHORT、I2C_BUS_HANG、
+STATE_ILLEGAL 锁存，软件清除无效。
 
-现状里有些失效模式找不到对应的 FaultCode，本文件标为「缺口」，需要后续在枚举末尾追加。
+原先找不到对应 FaultCode 的失效模式已在枚举末尾补齐，逐个对照见第五节。
 没有在线检测手段的条目单独标出，集中列在文末。
 
 ---
@@ -36,7 +38,7 @@ MECH_STUCK 锁存，软件清除无效。
 
 - 所属模块：DIAPHRAGM_MODULE
 - 检测手段：**无在线检测**。压力波形异常或气密性下降可在测试后看出，运行中靠人工目视与实验后检查。
-- 系统响应：无对应 FaultCode。操作者停止动作、更换膜片、记录；破裂导致的异常曲线在数据处理阶段剔除并复测。
+- 系统响应：MEMBRANE_RUPTURE(10) 硬故障，锁存。目前无在线检测，靠人工检出后置位；操作者停止动作、更换膜片、记录，破裂导致的异常曲线在数据处理阶段剔除并复测。
 - 严重度：中
 - 是否已有缓解：部分。可拆压环便于检查与更换；§17 寿命检查含裂纹项。
 
@@ -61,7 +63,7 @@ MECH_STUCK 锁存，软件清除无效。
 
 - 所属模块：MAGAZINE_MODULE、PAYLOAD_MODULE
 - 检测手段：**无专用传感器**。只能靠人工、视频或出膛异常发现；M1 里作为记录字段，不构成实时判据。
-- 系统响应：无对应 FaultCode。检出后记录并禁 Mode B，待修供给。
+- 系统响应：DOUBLE_FEED(11) 软故障，检出后禁 Mode B；通过 CLEAR 清除，待修供给。
 - 严重度：中
 - 是否已有缓解：部分。旋转盘独立 pocket 降低叠片概率；§18 把 double_feed 列为记录项。
 
@@ -89,8 +91,8 @@ MECH_STUCK 锁存，软件清除无效。
 
 - 所属模块：HAL、I2C0、MCP23017
 - 检测手段：I2C 事务超时或 NACK；读取的慢速信号（MECH_RECOVERED、MAG_INDEX_OK 等）持续不变。
-- 系统响应：慢速输入不可信。释放链与预载使能不依赖 I2C，硬件仍独立。当前枚举没有 I2C 运行期故障码，
-  PERIPH_INIT(1) 只在初始化阶段贴切，属于缺口，应追加专门故障码并置 FAULT、保持硬件断开。
+- 系统响应：慢速输入不可信。释放链与预载使能不依赖 I2C，硬件仍独立。I2C_BUS_HANG(13) 硬故障，
+  置 FAULT 并保持硬件断开；PERIPH_INIT(1) 只覆盖上电初始化失败，运行期总线故障由前者单列。
 - 严重度：高
 - 是否已有缓解：部分。释放门控与预载使能不经 I2C（架构 §6.6）。
 
@@ -167,16 +169,21 @@ MECH_STUCK 锁存，软件清除无效。
 
 ---
 
-## 五、缺口汇总（需要新增 FaultCode）
+## 五、缺口闭合记录
 
-当前 FaultCode 枚举覆盖不了以下失效模式，建议在枚举末尾追加，不改动已有取值：
+原先本节列的五个缺口都已在枚举末尾追加对应码，未改动既有取值：
 
-| 失效模式 | 建议故障码用途 | 严重度建议 |
-|---|---|---|
-| FM-03 膜片破裂 | 膜片或气路异常 | 中 |
-| FM-06 双片 | 供给双片 | 中 |
-| FM-08 FIRE_INHIBIT 短路 | 安全输入通道不一致或卡死 | 硬 |
-| FM-09 I2C 总线卡死 | I2C 运行期事务失败 | 硬 |
-| FM-13 不可能组合 | 状态机守卫违约 | 硬 |
+| 失效模式 | 原缺口用途 | 对应新码 | 分级 |
+|---|---|---|---|
+| FM-03 膜片破裂 | 膜片或气路异常 | `MEMBRANE_RUPTURE`(10) | 硬 |
+| FM-06 双片 | 供给双片 | `DOUBLE_FEED`(11) | 软 |
+| FM-08 FIRE_INHIBIT 短路 | 安全输入通道不一致或卡死 | `FIRE_INHIBIT_SHORT`(12) | 硬 |
+| FM-09 I2C 总线卡死 | I2C 运行期事务失败 | `I2C_BUS_HANG`(13) | 硬 |
+| FM-13 不可能组合 | 状态机守卫违约 | `STATE_ILLEGAL`(14) | 硬 |
 
-FM-04 弹性元件疲劳、FM-15 舵机卡死属于测量或标定问题，先补检测手段，暂不急于进 FaultCode。
+分级取值以 `faultSeverity()` 为准：`MEMBRANE_RUPTURE`、`FIRE_INHIBIT_SHORT`、`I2C_BUS_HANG`、
+`STATE_ILLEGAL` 锁存，`DOUBLE_FEED` 可在清障后清除。原表给 FM-03、FM-06 的严重度建议写作「中」，
+这里按代码的实际分级落实。
+
+仍未闭合的是 FM-04 弹性元件疲劳与 FM-15 开环舵机非归零时段卡死，两者属于测量或标定问题，
+没有对应码，先补检测手段。FM-08 的失效本身有了码，但检测手段仍未实现，运行期还发现不了。
