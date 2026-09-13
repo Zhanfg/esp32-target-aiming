@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "esp32-aim-reference"
+version = "0.1.0"
+description = "ESP32-S3 dual-axis turret target-locking algorithm core -- Python reference implementation (authoritative math, to be hand-ported to C++ firmware)"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

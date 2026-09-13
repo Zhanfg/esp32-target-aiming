@@ -1,0 +1,33 @@
+# --- 构建产物（PlatformIO） ---
+.pio/
+.pioenvs/
+.piolibdeps/
+build/
+*.bin
+*.elf
+*.map
+*.hex
+compile_commands.json
+
+# --- Python（algo_reference 均为源码，产物不入库） ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- 编辑器 / 操作系统 ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- 本地私有数据（标定原始数据、实验室记录，不含样例） ---
+local/
+*.local.json
+*.local.csv

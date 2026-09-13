@@ -1,0 +1,14 @@
+# PlatformIO 构建产物与缓存（体积大、可再生成，不入库）
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# 编译输出（固件/调试符号/映射表）
+*.bin
+*.elf
+*.map
+*.hex
+
+# 编辑器与编译数据库（每人环境不同，不入库）
+.vscode/
+compile_commands.json

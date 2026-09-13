@@ -1,0 +1,41 @@
+name: algorithm-tests
+
+# 只关心算法参考实现的正确性。固件编译检查暂未纳入：
+# PlatformIO 需要拉取 esp32-camera 等依赖，CI 上耗时且易受网络影响，
+# 待 P0 稳定后再单独加一条 firmware-build 工作流。
+on:
+  push:
+    paths:
+      - 'algo_reference/**'
+      - '.github/workflows/algorithm-tests.yml'
+  pull_request:
+    paths:
+      - 'algo_reference/**'
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.12']
+    defaults:
+      run:
+        working-directory: algo_reference
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pytest
+
+      - name: 运行算法测试
+        # pyproject.toml 中通过 pythonpath = ["src"] 让 src 布局直接生效，无需安装步骤
+        run: python -m pytest -q
