@@ -21,6 +21,12 @@ struct CalibShellHooks {
     void (*jog)(float pan_deg, float tilt_deg) = nullptr;
     void (*emergencyStop)() = nullptr;
     bool (*clearFault)() = nullptr;                     // 软故障清除，只把系统送到 SAFE
+
+    // 批次追溯编号（uint16，0 = 未设置）。写接口负责写 NVS，失败返回 false。
+    uint16_t (*getMembraneId)() = nullptr;
+    uint16_t (*getPayloadId)() = nullptr;
+    bool (*setMembraneId)(uint16_t id) = nullptr;
+    bool (*setPayloadId)(uint16_t id) = nullptr;
 };
 
 // 任一回调为空则本模块禁用。返回 false 表示注入不完整。

@@ -1,10 +1,15 @@
 /**
  * telemetry.cpp
  *
- * CSV 表头（§19，共 17 个字段，字段名与顺序不可改）：
- *   MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,boundary_state,
- *       preload_state,membrane_id,payload_id,cycle_count,stage1_event,stage2_event,
- *       mechanism_recovered,magazine_position,magazine_index_ok,fault_code,operator_note
+ * 两条线并存：
+ *   MST, 表头（§19，共 17 个字段，字段名与顺序不可改）：
+ *     MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,boundary_state,
+ *         preload_state,membrane_id,payload_id,cycle_count,stage1_event,stage2_event,
+ *         mechanism_recovered,magazine_position,magazine_index_ok,fault_code,operator_note
+ *   DIAG, 表头（每控制拍一条，只在 AIM_VERBOSE_TELEMETRY==1 时输出）：
+ *     DIAG,timestamp_ms,loop_us,obs_valid,obs_dropped,px,py,confidence,
+ *          pan_deg,tilt_deg,pan_target_deg,tilt_target_deg,
+ *          err_pan_deg,err_tilt_deg,err_deg,aim_state,has_feedback
  */
 
 #include "telemetry.h"
@@ -26,6 +31,12 @@ void telemetryInit(uint32_t baud) {
                    "boundary_state,preload_state,membrane_id,payload_id,cycle_count,"
                    "stage1_event,stage2_event,mechanism_recovered,magazine_position,"
                    "magazine_index_ok,fault_code,operator_note");
+#if AIM_VERBOSE_TELEMETRY
+    Serial.println("# DIAG frame telemetry; header:");
+    Serial.println("DIAG,timestamp_ms,loop_us,obs_valid,obs_dropped,px,py,confidence,"
+                   "pan_deg,tilt_deg,pan_target_deg,tilt_target_deg,"
+                   "err_pan_deg,err_tilt_deg,err_deg,aim_state,has_feedback");
+#endif
 }
 
 static void emitLine(const TelemetryRecord& rec) {
@@ -65,6 +76,31 @@ void telemetryEmit(const TelemetryRecord& rec) {
         out.timestamp = now;
         emitLine(out);
     }
+#endif
+}
+
+void telemetryEmitDiag(const DiagRecord& rec) {
+#if AIM_VERBOSE_TELEMETRY
+    // 逐控制拍输出。发布固件不逐帧刷屏，这条线整体关掉。
+    Serial.printf("DIAG,%lu,%lu,%u,%u,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u\n",
+                  (unsigned long)rec.timestamp_ms,
+                  (unsigned long)rec.loop_us,
+                  (unsigned)rec.obs_valid,
+                  (unsigned)rec.obs_dropped,
+                  (double)rec.px,
+                  (double)rec.py,
+                  (double)rec.confidence,
+                  (double)rec.pan_deg,
+                  (double)rec.tilt_deg,
+                  (double)rec.pan_target_deg,
+                  (double)rec.tilt_target_deg,
+                  (double)rec.err_pan_deg,
+                  (double)rec.err_tilt_deg,
+                  (double)rec.err_deg,
+                  (unsigned)rec.aim_state,
+                  (unsigned)rec.has_feedback);
+#else
+    (void)rec; // 关闭逐帧遥测时这条线是空实现
 #endif
 }
 

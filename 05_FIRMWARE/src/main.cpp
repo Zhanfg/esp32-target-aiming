@@ -17,6 +17,7 @@
 
 #include "config.h"
 #include "aim_types.h"
+#include "data/batch_tags.h"
 #include "calibration/calibration.h"
 #include "comms/calib_shell.h"
 #include "comms/telemetry.h"
@@ -37,6 +38,9 @@ static FireMode s_mode = (FireMode)FIRE_MODE_DEFAULT;
 static bool s_vision_ok = false;
 static bool s_cal_ok = false;
 static CalibrationData s_cal;
+
+// 批次追溯编号：由操作者经 SET 命令写入并存 NVS，上电读回。0 表示未设置。
+static BatchTags s_batch;
 
 static TargetObservation s_obs;
 static uint32_t s_last_capture_ms = 0;
@@ -407,6 +411,30 @@ static void shellApplyCalibration() { s_cal_ok = s_cal.valid; }
 static void shellJog(float pan_deg, float tilt_deg) { servoAxisSetAxesDeg(pan_deg, tilt_deg); }
 static void shellEmergencyStop() { enterFault(FaultCode::ESTOP, "shell estop"); }
 
+static uint16_t shellGetMembraneId() { return s_batch.membrane_id; }
+static uint16_t shellGetPayloadId() { return s_batch.payload_id; }
+
+// 先改内存再落 NVS，写失败回退，保证参数校验失败或存储失败时都保持原值。
+static bool shellSetMembraneId(uint16_t id) {
+    const uint16_t prev = s_batch.membrane_id;
+    s_batch.membrane_id = id;
+    if (!batchTagsSave(s_batch)) {
+        s_batch.membrane_id = prev;
+        return false;
+    }
+    return true;
+}
+
+static bool shellSetPayloadId(uint16_t id) {
+    const uint16_t prev = s_batch.payload_id;
+    s_batch.payload_id = id;
+    if (!batchTagsSave(s_batch)) {
+        s_batch.payload_id = prev;
+        return false;
+    }
+    return true;
+}
+
 static bool shellSetCalibrationMode(bool enable) {
     if (enable) {
         if (s_fault_latched) return false;
@@ -436,6 +464,14 @@ void setup() {
                   CONTROL_LOOP_HZ, PAN_MIN_DEG, PAN_MAX_DEG, TILT_MIN_DEG, TILT_MAX_DEG);
     Serial.printf("servo drive: %s\n",
                   (SERVO_DRIVE_TYPE == SERVO_DRIVE_BUS) ? "bus" : "pwm");
+
+    // 批次追溯编号从 NVS 读回，断电不丢。无记录时保持 0，0 表示未设置。
+    if (batchTagsLoad(s_batch)) {
+        Serial.printf("[batch] membrane_id=%u payload_id=%u\n",
+                      (unsigned)s_batch.membrane_id, (unsigned)s_batch.payload_id);
+    } else {
+        Serial.println("[batch] 无批次记录，膜片/载荷编号均为 0（未设置）");
+    }
 
     // 释放链相关引脚先落到安全侧，任何后续初始化失败都不会让它误动。
     pinMode(RELEASE_CMD_PIN, OUTPUT);
@@ -475,6 +511,10 @@ void setup() {
     shell_hooks.jog = shellJog;
     shell_hooks.emergencyStop = shellEmergencyStop;
     shell_hooks.clearFault = faultClear;
+    shell_hooks.getMembraneId = shellGetMembraneId;
+    shell_hooks.getPayloadId = shellGetPayloadId;
+    shell_hooks.setMembraneId = shellSetMembraneId;
+    shell_hooks.setPayloadId = shellSetPayloadId;
     if (!calibShellInit(shell_hooks)) {
         Serial.println("[cal] 标定外壳未启用：回调注入不完整");
     }
@@ -567,6 +607,7 @@ void loop() {
 
     // 取帧（按目标帧率 + 看门狗降帧倍数节流）
     bool obs_fresh = false;
+    bool obs_dropped = false; // 本拍尝试取帧但未得到有效观测
     if (!s_fault_latched && s_vision_ok) {
         const uint32_t vision_period_ms = (1000u / VISION_TARGET_FPS) * s_frame_divider;
         if ((now_ms - s_last_capture_ms) >= vision_period_ms) {
@@ -577,6 +618,7 @@ void loop() {
                 s_vision_frame_count++;
                 s_capture_fail_streak = 0;
             } else {
+                obs_dropped = true;
                 if (s_capture_fail_streak < 0xFFFFFFFFul) s_capture_fail_streak++;
             }
         }
@@ -626,6 +668,8 @@ void loop() {
     rec.mode = (uint8_t)s_mode;
     rec.boundary_state = MST_BOUNDARY_RESEARCH_ACTIVE;
     rec.preload_state = s_preload_state;
+    rec.membrane_id = s_batch.membrane_id;
+    rec.payload_id = s_batch.payload_id;
     rec.cycle_count = s_cycle_count;
     rec.stage1_event = s_stage1_count;
     rec.stage2_event = s_stage2_count;
@@ -638,6 +682,37 @@ void loop() {
 
     // 看门狗：超预算只降帧；连续超预算或单拍严重超时直接进 FAULT（§6.9 第 9 条）。
     const uint32_t loop_us = micros() - t_loop_start;
+
+    // 帧轨迹诊断行（DIAG,）：与上面的 MST, 各走各的，只服务指向精度、控制周期与锁定建立时间。
+    // loop_us 量的是本拍计算耗时，不含遥测打印，避免打印本身抬高控制周期读值。
+    {
+        DiagRecord diag;
+        diag.timestamp_ms = now_ms;
+        diag.loop_us = loop_us;
+        diag.obs_valid = obs_fresh ? 1 : 0;
+        diag.obs_dropped = obs_dropped ? 1 : 0;
+        if (obs_fresh) {
+            diag.px = s_obs.centroid.x;
+            diag.py = s_obs.centroid.y;
+            diag.confidence = s_obs.centroid.confidence;
+            float bearing_deg = 0.0f, elevation_deg = 0.0f;
+            if (calibrationPixelToAngles(s_cal, diag.px, diag.py, bearing_deg, elevation_deg)) {
+                diag.err_pan_deg = bearing_deg;
+                diag.err_tilt_deg = elevation_deg;
+                diag.err_deg = std::sqrt(bearing_deg * bearing_deg + elevation_deg * elevation_deg);
+            }
+        }
+        const AxisState pan_state = servoAxisState(AXIS_PAN);
+        const AxisState tilt_state = servoAxisState(AXIS_TILT);
+        diag.pan_deg = pan_state.position_deg;
+        diag.tilt_deg = tilt_state.position_deg;
+        diag.pan_target_deg = pan_state.target_deg;
+        diag.tilt_target_deg = tilt_state.target_deg;
+        diag.aim_state = (uint8_t)s_aim;
+        diag.has_feedback = (pan_state.has_feedback || tilt_state.has_feedback) ? 1 : 0;
+        telemetryEmitDiag(diag);
+    }
+
     if (loop_us > (uint32_t)CONTROL_LOOP_BUDGET_MS * 1000u) {
         if (s_overrun_streak < 0xFFFFFFFFul) s_overrun_streak++;
         if (s_overrun_streak == 1 || (s_overrun_streak % 50u) == 0u) {

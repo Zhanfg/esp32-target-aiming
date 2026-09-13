@@ -151,6 +151,8 @@ void printHelp() {
     Serial.println("CMD,CAL SAVE,把当前仿射写入 NVS");
     Serial.println("CMD,CAL LOAD,从 NVS 读回并应用");
     Serial.println("CMD,CAL EXIT,退出标定模式回 SEARCHING");
+    Serial.println("CMD,SET MEMBRANE <id>,设膜片批次编号（uint16，0..65535，0=未设置），写 NVS");
+    Serial.println("CMD,SET PAYLOAD <id>,设载荷批次编号（uint16，0..65535，0=未设置），写 NVS");
     Serial.println("CMD,ESTOP,急停：切断舵机与释放链并锁存 FAULT");
     Serial.println("CMD,CLEAR,清除软故障并送 SAFE（硬故障无效，唯一恢复路径 SAFE->HOME）");
 }
@@ -167,6 +169,12 @@ void printStatus() {
         Serial.printf("ST,fault_code,%d\n", (int)s_hooks.getFaultCode());
     }
     Serial.printf("ST,cal_mode,%d\n", inCalMode() ? 1 : 0);
+    if (s_hooks.getMembraneId) {
+        Serial.printf("ST,membrane_id,%u\n", (unsigned)s_hooks.getMembraneId());
+    }
+    if (s_hooks.getPayloadId) {
+        Serial.printf("ST,payload_id,%u\n", (unsigned)s_hooks.getPayloadId());
+    }
 
     const CalibrationData* cal = s_hooks.calibration ? s_hooks.calibration() : nullptr;
     if (!cal) {
@@ -494,6 +502,59 @@ void cmdFaultClear() {
     }
 }
 
+// SET MEMBRANE <id> / SET PAYLOAD <id>：写批次追溯编号并落 NVS。
+// 参数校验失败或写入失败都不改原值，由回调实现负责保持。
+void cmdSet(char* p) {
+    char* which = nextToken(p);
+    if (!which) {
+        replyErr("SET 缺少目标，用法 SET MEMBRANE <id> 或 SET PAYLOAD <id>");
+        return;
+    }
+    toUpper(which);
+    char* arg = nextToken(p);
+    if (!arg) {
+        replyErr("SET %s 缺少编号", which);
+        return;
+    }
+    if (nextToken(p)) {
+        replyErr("参数过多，用法 SET %s <id>", which);
+        return;
+    }
+    long id = 0;
+    if (!parseInt(arg, id)) {
+        replyErr("编号非整数");
+        return;
+    }
+    if (id < 0 || id > 65535) {
+        replyErr("编号越界，有效范围 0..65535（0 表示未设置）");
+        return;
+    }
+
+    if (strcmp(which, "MEMBRANE") == 0) {
+        if (!s_hooks.setMembraneId) {
+            replyErr("膜片编号接口未注入");
+            return;
+        }
+        if (!s_hooks.setMembraneId((uint16_t)id)) {
+            replyErr("膜片编号写入 NVS 失败，保持原值");
+            return;
+        }
+        replyOk("SET MEMBRANE %ld 已写入 NVS", id);
+    } else if (strcmp(which, "PAYLOAD") == 0) {
+        if (!s_hooks.setPayloadId) {
+            replyErr("载荷编号接口未注入");
+            return;
+        }
+        if (!s_hooks.setPayloadId((uint16_t)id)) {
+            replyErr("载荷编号写入 NVS 失败，保持原值");
+            return;
+        }
+        replyOk("SET PAYLOAD %ld 已写入 NVS", id);
+    } else {
+        replyErr("未知 SET 目标 \"%s\"，可选 MEMBRANE 或 PAYLOAD", which);
+    }
+}
+
 void dispatchCal(char* p) {
     char* sub = nextToken(p);
     if (!sub) {
@@ -524,6 +585,7 @@ void processLine(char* line) {
     else if (strcmp(cmd, "STATUS") == 0) printStatus();
     else if (strcmp(cmd, "ESTOP") == 0) cmdEstop();
     else if (strcmp(cmd, "CLEAR") == 0) cmdFaultClear();
+    else if (strcmp(cmd, "SET") == 0) cmdSet(p);
     else if (strcmp(cmd, "CAL") == 0) dispatchCal(p);
     else replyErr("未知命令 \"%s\"，输入 HELP", cmd);
 }
@@ -564,7 +626,8 @@ bool calibShellInit(const CalibShellHooks& hooks) {
     s_ready = hooks.getObservation && hooks.getAxes && hooks.getState &&
               hooks.getCycleState && hooks.calibration && hooks.applyCalibration &&
               hooks.setCalibrationMode && hooks.jog && hooks.emergencyStop &&
-              hooks.clearFault;
+              hooks.clearFault && hooks.getMembraneId && hooks.getPayloadId &&
+              hooks.setMembraneId && hooks.setPayloadId;
     s_count = 0;
     s_line_len = 0;
     s_overflow = false;

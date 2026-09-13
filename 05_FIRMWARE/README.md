@@ -65,7 +65,9 @@ pio run -e esp32-s3-devkitc-1-release
 
 ## 4. 遥测格式
 
-数据行按规格书 §19 的 17 个字段，前缀 `MST,`：
+固件走两条遥测线，前缀不同，用途不同。
+
+`MST,` 是规格书 §19 的实验记录，每发一条，17 个字段：
 
 ```
 MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,boundary_state,
@@ -74,7 +76,21 @@ MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,boundary_st
 EVT,<t_ms>,<tag>,<message>
 ```
 
-发布环境（`AIM_VERBOSE_TELEMETRY=0`）只留低频心跳行。故障码见 `fault-codes.md`。
+`DIAG,` 是每控制拍的帧轨迹，由 `AIM_VERBOSE_TELEMETRY` 控制，开发期打开、发布期关闭，
+16 个字段：
+
+```
+DIAG,timestamp_ms,loop_us,obs_valid,obs_dropped,px,py,confidence,
+     pan_deg,tilt_deg,pan_target_deg,tilt_target_deg,
+     err_pan_deg,err_tilt_deg,err_deg,aim_state,has_feedback
+```
+
+`err_deg` 是目标质心相对光轴的角偏差合成量，静态指向 RMSE 按它算；`loop_us` 是控制周期；
+`aim_state` 的 3 与 4 对应 TRACKING 与 LOCKED，据此算锁定建立时间。字段口径见
+`src/comms/telemetry.h`。
+
+发布环境（`AIM_VERBOSE_TELEMETRY=0`）只留 `MST,` 低频心跳行，`DIAG,` 行不输出。故障码见
+`fault-codes.md`。
 
 ## 5. 安全要点
 
@@ -82,3 +98,18 @@ EVT,<t_ms>,<tag>,<message>
 - `FAULT` 锁存，`FAULT → READY` 不存在；软故障用 `CLEAR` 后走 `SAFE → HOME`，硬故障需断电。
 - 归零期间释放链强制断开，参考开关未全中不进入 `READY`。
 - 无反馈 PWM 舵机不能检测失速，失速检测依赖总线舵机反馈或电流监控，需台架验证。
+
+## 6. 批次编号命令
+
+膜片与载荷的批次号供实验追溯，来源只能是操作者输入。串口命令写入后存 NVS（命名空间
+`aim_batch`，键 `membrane`、`payload`），断电不丢，上电由 `setup()` 读回，组装遥测时填入
+`membrane_id`、`payload_id`。两字段都是 uint16，取值 0 .. 65535，0 表示未设置。
+
+```
+SET MEMBRANE <id>    # 设膜片批次编号
+SET PAYLOAD <id>     # 设载荷批次编号
+STATUS               # 输出 ST,membrane_id,<n> 与 ST,payload_id,<n>
+```
+
+参数非数字或超出 0 .. 65535 会报错并保持原值；NVS 写入失败也会回退原值。这两条命令在
+`calib_shell` 的 `HELP` 里也能查到。

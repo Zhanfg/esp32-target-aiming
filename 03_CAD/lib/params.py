@@ -118,6 +118,80 @@ ACT_ROD_D = 3.0
 ACT_ROD_LEN = 12.0
 
 # ---------------------------------------------------------------------------
+# 核心链布局常数：D / E 级的单级与双级共用同一套几何。
+# 双级底边间距沿用 C 级的 12 mm，保证与 B/C 的对照是同一条轴向链。
+# ---------------------------------------------------------------------------
+STAGE_Z_SPACING = 12.0        # 两级底边 Z 向间距，与 C 级一致
+OUTPUT_LEN = 2.0              # 顶点滑块到膜片的传力杆长度
+MEMB_STACK_T = 2.0 * MEMB_RING_T   # 两片压环叠厚
+
+# ---------------------------------------------------------------------------
+# BOUNDARY_MODULE：可机械切换的边界状态（§5.4、§13 D 级、§16 Test D1）
+# 底座托架沿 Z 浮动，两根 Y 向锁销插入托架即 locked，拔出即 released。
+# 两种状态的边界刚度不同，切换可逆、有机械止挡与定位珠，拨杆露出框架顶部，
+# 高速视频能看到状态与顶点运动。
+# ---------------------------------------------------------------------------
+BND_CARRIAGE = (16.0, 10.0, 4.0)      # 浮动托架 x/y/z
+BND_GUIDE_POST_D = 2.0                # Y 向导柱直径
+BND_GUIDE_POST_L = 12.0
+BND_LOCK_PIN_D = 1.6                  # Y 向锁销直径
+BND_LOCK_PIN_L = 6.0                  # 锁销短，抬起即脱离托架
+BND_LEVER = (16.0, 4.0, 2.0)          # 拨杆板，两销连成一体
+BND_DETENT_D = 3.0                    # 定位珠/柱塞量级
+BND_DETENT_L = 4.0
+BND_STOP_BLOCK = (4.0, 8.0, 3.0)      # released 行程机械止挡
+BND_RETURN_SPRING_D = 4.0             # 边界回复弹簧（低刚度支路）
+BND_RETURN_SPRING_L = 5.0
+BND_STATES = ("locked", "released")
+# released 状态放开托架的 Z 向行程上限，由止挡块确定，保证可复现
+BND_TRAVEL = 1.0
+# 两种边界的等效边界刚度 N/m：locked 走刚性支路，released 走弹簧支路
+BND_K_BASE = {"locked": STAGE_K_BASE, "released": STAGE_K_BASE / 10.0}
+BND_PIN_Y = {"locked": 0.0, "released": 8.0}     # 锁销中心 Y，抬起后脱开托架
+BND_LEVER_Y = {"locked": 6.0, "released": 9.0}   # 拨杆中心 Y，状态指示
+
+# ---------------------------------------------------------------------------
+# PRELOAD_MODULE：多种预载状态（§5.4、§23.3 预载为优先扫描变量）
+# 预载用可换垫片设定托架的初始 Z 向压入量，垫片总厚即预载值。
+# ---------------------------------------------------------------------------
+PRELOAD_STATES = {
+    "P0": 0.0,     # 无预载，作为对照
+    "P1": 0.5,
+    "P2": 1.0,
+    "P3": 1.5,
+}
+PRELOAD_HOLDER = (14.0, 10.0, 3.0)
+PRELOAD_SHIM_W = 8.0
+PRELOAD_SHIM_H = 10.0
+PRELOAD_SHIM_T = 0.5          # 单片垫片厚，状态值按此厚度取整
+PRELOAD_PUSHER = (8.0, 10.0, 2.0)
+
+# ---------------------------------------------------------------------------
+# MAGAZINE_MODULE：6 / 8 位旋转供给盘（§8、§9、§13 E 级）
+# 载荷为超轻软圆片（§8.2），每工位一个 pocket。pocket 做成环形座加中心通孔，
+# 硬珠会从中心孔漏下，薄片才能平铺跨住座圈；再配固定间隙的盖板做厚度防呆。
+# ---------------------------------------------------------------------------
+MAG_POSITIONS = (6, 8)
+MAG_PAYLOAD_D = 14.0          # 软圆片直径，略小于 16 mm 通径
+MAG_PAYLOAD_T = 2.0           # 软圆片厚度，工程估计
+MAG_POCKET_HOLE_D = 8.0       # pocket 中心通孔，硬珠漏下
+MAG_POCKET_SEAT_OD = 16.0     # 座圈外径
+MAG_POCKET_GAP = 2.0          # 相邻座圈最小间隙
+MAG_POCKET_LIP_H = 1.0        # 座圈凸出高度
+MAG_PLATE_T = 3.0             # 盘体厚度
+MAG_COVER_T = 2.0             # 索引盖板厚度
+MAG_HUB_R = 5.0               # 轮毂外半径
+MAG_AXLE_D = 6.0              # 中心轴直径
+MAG_RIM = 3.0                 # 盘体到座圈外缘的边距
+MAG_CLEAR = 0.5               # 盖板与软圆片顶面的固定间隙
+MAG_T = MAG_PLATE_T + MAG_POCKET_LIP_H + MAG_PAYLOAD_T + MAG_COVER_T + MAG_CLEAR
+MAG_INDEX_SPRING_D = 3.0
+MAG_INDEX_SPRING_L = 6.0
+MAG_PAWL = (4.0, 6.0, 3.0)    # 索引棘爪
+MAG_STOP_POST = (3.0, 3.0, 5.0)
+MAG_ZERO_FLAG = (3.0, 6.0, 2.0)   # 零位标记，随盘转动的遮光片
+
+# ---------------------------------------------------------------------------
 # 材料密度，kg/m^3。带材批次差异，弹性相关常数见各模块说明。
 # ---------------------------------------------------------------------------
 MATERIALS = {
@@ -128,10 +202,26 @@ MATERIALS = {
     "pet":      {"density": 1380.0, "role": "§6.2 候选 C 膜片与 §7.2 弹性片"},
     "steel301": {"density": 7900.0, "role": "§7.2 弹簧钢弹性片与销"},
     "brass":    {"density": 8500.0, "role": "铜套量级"},
+    "epp":      {"density": 40.0, "role": "§8.1 超轻软圆片载荷（泡沫量级）；待实测标定"},
 }
 
 # 弹性片材料到厚度的映射
 LEAF_THICKNESS = {"pet": STAGE_LEAF_T_PET, "steel301": STAGE_LEAF_T_STEEL}
+
+
+def mag_pitch_radius(positions: int) -> float:
+    """供给盘工位分布圆半径，mm。
+
+    相邻座圈的最小弦距要容下座圈外径加间隙：2*R*sin(pi/N) >= OD + gap，
+    取等号即最小分布圆，位越多 R 越大，这是 8 位盘变大的几何来源（§31）。
+    """
+    return (MAG_POCKET_SEAT_OD + MAG_POCKET_GAP) / (
+        2.0 * math.sin(math.pi / positions))
+
+
+def mag_disc_outer_r(positions: int) -> float:
+    """供给盘盘体半径，分布圆半径加座圈半径再加边距。"""
+    return mag_pitch_radius(positions) + MAG_POCKET_SEAT_OD / 2.0 + MAG_RIM
 
 
 # ---------------------------------------------------------------------------
@@ -238,11 +328,32 @@ def leaf(name, module, material, p0, p1, thickness, width, y=0.0, count=1,
 # ---------------------------------------------------------------------------
 # 布局：三级沿 Z 的模块位置，由 build.py 调用
 # ---------------------------------------------------------------------------
-def layout(level: str) -> dict:
+def _core_chain(z0: float, core: str):
+    """从第一级底边 z0 起算核心链，返回 stages / output / membrane 区间。
+
+    single 对应 B 级那种一个失稳单元，dual 对应 C 级那种两个串联。D 级与 E 级
+    都按 core 参数调用，边界研究与供给研究都不绑定在级数上（统一架构 §3.2 的
+    模型预警：双级相对单级增益有限，可能回退单级）。
+    """
+    core = core.lower()
+    if core == "single":
+        stages = [z0]
+    elif core == "dual":
+        stages = [z0, z0 + STAGE_Z_SPACING]
+    else:
+        raise ValueError(f"core 只能是 single 或 dual: {core}")
+    apex_top = stages[-1] + STAGE_APEX_H + STAGE_APEX_BLOCK[2]
+    output = (apex_top, apex_top + OUTPUT_LEN)
+    membrane = (output[1], output[1] + MEMB_STACK_T)
+    return stages, output, membrane
+
+
+def layout(level: str, core: str | None = None) -> dict:
     """返回该级原型的 Z 向模块区间，单位 mm。
 
     membrane 区间是两片压环叠起来的总厚；frame_len 由膜片前端再加一个压边得到。
     stages 是各级失稳单元的底边 Z 位置。A 级不含失稳单元与释放卡榫。
+    D / E 级额外给出 boundary、preload、magazine 区间，并用 core 选单级或双级。
     """
     level = level.upper()
     if level == "A":
@@ -269,8 +380,29 @@ def layout(level: str) -> dict:
             membrane=(39.0, 42.0),
             actuator=None,
         )
+    elif level in ("D", "E"):
+        core = (core or "single").lower()
+        release = (3.0, 14.5)
+        boundary = (15.0, 19.0)
+        preload = (15.0, 19.0)
+        stages, output, membrane = _core_chain(boundary[1], core)
+        lay = dict(
+            release=release,
+            boundary=boundary,
+            preload=preload,
+            stages=stages,
+            output=output,
+            membrane=membrane,
+            actuator=None,
+            core=core,
+        )
+        frame_len = membrane[1] + FRAME_RIM_T
+        if level == "E":
+            lay["magazine"] = (frame_len, frame_len + MAG_T)
+        else:
+            lay["magazine"] = None
     else:
-        raise ValueError(f"A/B/C 之外的级别本轮不做: {level}")
+        raise ValueError(f"A/B/C/D/E 之外的级别本轮不做: {level}")
     lay["level"] = level
     lay["rear"] = (0.0, FRAME_REAR_T)
     lay["wall_z0"] = FRAME_REAR_T
@@ -307,6 +439,21 @@ PARAM_SOURCES = {
     "REL_PIN_D": "工程估计：1.0 mm 钢销，受剪断面约 0.79 mm^2",
     "REL_PIN_STROKE": "工程估计：2 mm 行程足以让卡榫转过自锁角",
     "ACT_BODY_SIZE": "工程估计：低速微型执行器本体量级，A 级只作基线推动",
+    "BND_CARRIAGE": "工程估计：容纳两级底夹块，x 取框架内宽减 1 mm 余量",
+    "BND_LOCK_PIN_D": "工程估计：1.6 mm 钢销，受剪断面约 2.0 mm^2",
+    "BND_TRAVEL": "工程估计：released 边界 Z 向行程 1 mm，由止挡块硬限位；待实测标定",
+    "BND_PIN_Y": "工程估计：locked 时销插入托架中心，released 时抬出托架外",
+    "STAGE_Z_SPACING": "沿用 C 级两级底边间距 12 mm，保证 D/E 与 C 的级序对照同链",
+    "PRELOAD_STATES": "§23.3 预载为优先扫描变量；0.5 mm 步距为工程估计，待实测标定",
+    "PRELOAD_SHIM_T": "工程估计：0.5 mm 可换垫片，PETG 打印或冲片",
+    "MAG_POSITIONS": "§9.1 6-8 位旋转供给盘，两种布局都要能算；§31 8 位变大则先 6 位",
+    "MAG_PAYLOAD_D": "§8.1 EVA/EPP 软圆片，直径取 14 mm，略小于 16 mm 通径；待实测标定",
+    "MAG_PAYLOAD_T": "§8.1 软圆片厚度 2 mm 为工程估计；待实测标定",
+    "MAG_POCKET_HOLE_D": "§8.4 中心通孔 8 mm，硬珠（BB 4.5-6 mm）会漏下，薄片才能跨住",
+    "MAG_POCKET_SEAT_OD": "工程估计：座圈外径 16 mm，对应通径量级",
+    "MAG_POCKET_GAP": "工程估计：相邻座圈留 2 mm，避免 8 位盘相邻干涉",
+    "MAG_CLEAR": "§8.4 盖板与软圆片顶面留 0.5 mm 固定间隙，超厚硬载荷会顶住盖板卡索引",
+    "MAG_ZERO_FLAG": "§9.5 零位标记，随盘转动的遮光片，回零由 MCU 读取",
 }
 
 # 自锁余量随角度变化，release.describe() 会打印

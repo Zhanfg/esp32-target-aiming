@@ -17,18 +17,21 @@
 
 文件名带版本，改了结构就另存一版，别覆盖上一版，方便回查某次实验用的是哪套模型。
 
-## 三级原型的关系
+## 各级原型的关系
 
-本轮先做 A/B/C 三级，结构沿同一条轴向串联，差别只在中间放什么：
+A 到 E 五级沿同一条轴向串联，D 与 E 的核心支持单级与双级两种：
 
 | 级别 | 中间级 | 失稳单元 | 释放卡榫 | 轴向长度 |
 |---|---|---|---|---|
 | A | 低速执行器直推 | 无 | 无 | 32 mm |
 | B | 单个 von Mises truss | 1 个 | 有 | 38 mm |
 | C | 两个 von Mises truss 串联 | 2 个 | 有 | 44 mm |
+| D | 边界切换加预载 | 1 或 2 个 | 有 | 36 / 47.5 mm |
+| E | D 级加 6–8 位供给盘 | 1 或 2 个 | 有 | 46.25 / 58.25 mm。装 6/8 位盘后横向 58.00 / 69.04 mm，超出 §1.2 的 15–25 mm 目标，轴向双级也超出 8.25 mm（`MST-01E` 几何自检，非实测），见 `../00_MASTER_SPEC/DESIGN_DECISION_LOG.md` D-15、`../02_REQUIREMENTS/RISK_REGISTER.md` RSK-16 |
 
 A 没有储能元件，按 §13 是直接推动的基线，不需要释放卡榫。B 与 C 用同一套自锁卡榫加电磁铁拔销的
-释放机构。三级共用 FRAME、DIAPHRAGM_MODULE，C 额外多一个 STAGE_2。
+释放机构。三级共用 FRAME、DIAPHRAGM_MODULE，C 额外多一个 STAGE_2。D 级加 BOUNDARY_MODULE 与
+PRELOAD_MODULE，E 级再加 MAGAZINE_MODULE。
 
 ## 参数库怎么用
 
@@ -39,6 +42,9 @@ A 没有储能元件，按 §13 是直接推动的基线，不需要释放卡榫
 - `lib/stage.py`：STAGE_1 / STAGE_2 的 von Mises truss 单元，弹性片是独立件。
 - `lib/membrane.py`：DIAPHRAGM_MODULE，膜片加前后两片可拆压环。
 - `lib/release.py`：RELEASE_MODULE，自锁卡榫与电磁铁拔销，含自锁余量计算。
+- `lib/boundary.py`：BOUNDARY_MODULE，D 级的 locked / released 可切换边界。
+- `lib/preload.py`：PRELOAD_MODULE，D 级的可换垫片预载状态。
+- `lib/magazine.py`：MAGAZINE_MODULE，E 级的 6/8 位供给盘与索引。
 - `lib/checks.py`：件数、包围盒、体积、质量、envelope 对照。
 - `lib/freecad_export.py`：把 Solid 列表转 FreeCAD 实体并导出 STEP / FCStd，best-effort。
 
@@ -52,6 +58,10 @@ A 没有储能元件，按 §13 是直接推动的基线，不需要释放卡榫
 python MST-01A/build.py
 python MST-01B/build.py
 python MST-01C/build.py
+python MST-01D/build.py                  # 默认单级 locked P0
+python MST-01D/build.py --core dual --boundary released --preload P2
+python MST-01E/build.py                  # 默认单级 6 位
+python MST-01E/build.py --core dual --positions 8
 ```
 
 每跑一次打印一份几何自检：件数、包围盒、体积、按材料质量估算、模块件数与 envelope 判定。

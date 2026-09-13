@@ -260,11 +260,14 @@ static bool cycleStateLegal() {
 枚举都是 `uint8_t`，底下就是整数，PC 端脚本按整数解析。
 
 - 标定外壳的 `STATUS` 命令（`calib_shell.cpp`）输出
-  `ST,cycle,<整数>,<名字>`、`ST,state,<整数>,<名字>`、`ST,fault_code,<整数>`。
+  `ST,cycle,<整数>,<名字>`、`ST,state,<整数>,<名字>`、`ST,fault_code,<整数>`、
+  `ST,membrane_id,<整数>`、`ST,payload_id,<整数>`。
   名字来自 `cycleName()` 与 `stateName()` 的 switch。
-- 遥测数据行 `MST,...`：`fault_code = (uint16_t)s_fault`；`mode = (uint8_t)s_mode`
+- 遥测数据行 `MST,...`：`fault_code = (uint16)s_fault`；`mode = (uint8_t)s_mode`
   （`FireMode`：0=空气，1=软载荷）；`preload_state`（0=空闲、1=预载中、2=已武装）；
-  `cycle_count` 在 `INDEX` 到位时自增；`magazine_position` 为当前工位。
+  `membrane_id`、`payload_id` 是批次追溯编号，由串口 `SET MEMBRANE <id>`、`SET PAYLOAD <id>`
+  写入 NVS（命名空间 `aim_batch`，键 `membrane`、`payload`），上电读回，uint16 取值 0 .. 65535，
+  0 表示未设置；`cycle_count` 在 `INDEX` 到位时自增；`magazine_position` 为当前工位。
 
 取值速查：
 

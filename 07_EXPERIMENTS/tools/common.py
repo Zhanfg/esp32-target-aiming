@@ -38,65 +38,199 @@ def warn(message: str) -> None:
     print(f"警告：{message}", file=sys.stderr)
 
 
-AIM_PREFIX = "AIM,"
+MST_PREFIX = "MST,"
 
-# 顺序与 05_FIRMWARE/src/comms/telemetry.cpp 的 printf 一致。
+# 顺序与 05_FIRMWARE/src/comms/telemetry.cpp 的 emitLine() printf 逐字一致：
+#   "MST,%lu,%u,%s,%s,%u,%u,%u,%u,%u,%lu,%u,%u,%u,%u,%u,%u,%s\n"
+# 字段含义、单位、取值范围见 08_DATA/DATA_SCHEMA.md 第 1 节。
 TELEMETRY_FIELDS = [
-    "t_ms", "state", "obs_valid", "px", "py", "conf",
-    "pan_deg", "tilt_deg", "pan_target", "tilt_target",
-    "pan_rate", "tilt_rate", "enc_pan", "enc_tilt", "loop_us",
+    "timestamp", "experiment_id", "prototype_version", "mechanism_version",
+    "mode", "boundary_state", "preload_state", "membrane_id", "payload_id",
+    "cycle_count", "stage1_event", "stage2_event", "mechanism_recovered",
+    "magazine_position", "magazine_index_ok", "fault_code", "operator_note",
 ]
 
-# 固件用 %d/%ld/%lu 打印，读成浮点再取整，省得区分。
-_INT_FIELDS = {"state", "obs_valid", "enc_pan", "enc_tilt", "loop_us"}
+# %s 打印的字段读成字符串，其余 %lu/%u 打印的字段读成整数。
+_STRING_FIELDS = {"prototype_version", "mechanism_version", "operator_note"}
 
-# 与 05_FIRMWARE/src/aim_types.h 的 AimState 顺序一致。
-STATE_NAMES = {
-    0: "IDLE",
-    1: "CALIBRATING",
-    2: "SEARCHING",
-    3: "TRACKING",
-    4: "LOCKED",
-    5: "FAULT",
+DIAG_PREFIX = "DIAG,"
+
+# 顺序与 05_FIRMWARE/src/comms/telemetry.cpp 的 telemetryEmitDiag() printf 逐字一致：
+#   "DIAG,%lu,%lu,%u,%u,%.2f,%.2f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u\n"
+# 每控制拍一行，用于算指向精度、控制周期与锁定建立时间，与 MST, 行互不影响。
+DIAG_FIELDS = [
+    "timestamp_ms", "loop_us", "obs_valid", "obs_dropped", "px", "py", "confidence",
+    "pan_deg", "tilt_deg", "pan_target_deg", "tilt_target_deg",
+    "err_pan_deg", "err_tilt_deg", "err_deg", "aim_state", "has_feedback",
+]
+
+# 整数字段，其余按小数解析。
+_DIAG_INT_FIELDS = {"timestamp_ms", "loop_us", "obs_valid", "obs_dropped",
+                    "aim_state", "has_feedback"}
+
+# 以下枚举值与 05_FIRMWARE/src/aim_types.h 的顺序一致。遥测行只直接输出
+# fault_code / mode / boundary_state / preload_state，其余状态在标定外壳的 ST, 行里。
+CYCLE_STATE_NAMES = {
+    0: "BOOT", 1: "SAFE", 2: "HOME", 3: "READY", 4: "AIM_ALLOWED",
+    5: "PRELOAD", 6: "ARMED", 7: "RELEASE", 8: "RECOVER", 9: "INDEX",
+    10: "FAULT",
+}
+AIM_STATE_NAMES = {
+    0: "IDLE", 1: "CALIBRATING", 2: "SEARCHING", 3: "TRACKING",
+    4: "LOCKED", 6: "CALIB_MODE",
+}
+PRELOAD_STATE_NAMES = {0: "IDLE", 1: "PRELOADING", 2: "ARMED"}
+BOUNDARY_STATE_NAMES = {0: "BOUNDARY_0", 1: "BOUNDARY_1"}
+FIRE_MODE_NAMES = {0: "AIR_ONLY", 1: "SOFT_PAYLOAD"}
+FAULT_CODE_NAMES = {
+    0: "NONE", 1: "PERIPH_INIT", 2: "HOME_TIMEOUT", 3: "HOME_SWITCH_CONFLICT",
+    4: "RELEASE_GATE_SELFTEST", 5: "OBS_LINK", 6: "INDEX_FAIL", 7: "WATCHDOG",
+    8: "MECH_STUCK", 9: "ESTOP", 10: "MEMBRANE_RUPTURE", 11: "DOUBLE_FEED",
+    12: "FIRE_INHIBIT_SHORT", 13: "I2C_BUS_HANG", 14: "STATE_ILLEGAL",
+}
+# 分级与 aim_types.h 的 faultSeverity() 一致：0 无，2/5/6/7/9/11 软，其余硬。
+FAULT_SEVERITY_NAMES = {
+    0: "NONE",
+    2: "SOFT", 5: "SOFT", 6: "SOFT", 7: "SOFT", 9: "SOFT", 11: "SOFT",
+    1: "HARD", 3: "HARD", 4: "HARD", 8: "HARD", 10: "HARD", 12: "HARD",
+    13: "HARD", 14: "HARD",
 }
 
 
-def state_name(code) -> str:
+def _enum_name(table, code, fallback: str = "UNKNOWN") -> str:
     try:
-        return STATE_NAMES.get(int(code), f"UNKNOWN({int(code)})")
+        return table.get(int(code), f"{fallback}({int(code)})")
     except (TypeError, ValueError):
-        return f"UNKNOWN({code})"
+        return f"{fallback}({code})"
 
 
-def parse_aim_line(line: str):
-    """解析一行固件输出，非 AIM 行或字段不合法返回 None。"""
+def cycle_state_name(code) -> str:
+    return _enum_name(CYCLE_STATE_NAMES, code)
+
+
+def aim_state_name(code) -> str:
+    return _enum_name(AIM_STATE_NAMES, code)
+
+
+def preload_state_name(code) -> str:
+    return _enum_name(PRELOAD_STATE_NAMES, code)
+
+
+def boundary_state_name(code) -> str:
+    return _enum_name(BOUNDARY_STATE_NAMES, code)
+
+
+def fire_mode_name(code) -> str:
+    return _enum_name(FIRE_MODE_NAMES, code)
+
+
+def fault_code_name(code) -> str:
+    return _enum_name(FAULT_CODE_NAMES, code)
+
+
+def fault_severity_name(code) -> str:
+    return _enum_name(FAULT_SEVERITY_NAMES, code)
+
+
+def parse_mst_line(line: str):
+    """解析一行 MST 遥测，前缀不对、列数不对或数值字段非法都返回 None。
+
+    固件上电时打印的表头行也以 MST, 开头，但数值列是字段名，会在转 int 时被拒。
+    """
     text = line.strip()
-    if not text.startswith(AIM_PREFIX):
+    if not text.startswith(MST_PREFIX):
         return None
-    parts = text[len(AIM_PREFIX):].split(",")
+    parts = text[len(MST_PREFIX):].split(",")
     if len(parts) != len(TELEMETRY_FIELDS):
         return None
     row = {}
     for name, token in zip(TELEMETRY_FIELDS, parts):
+        token = token.strip()
+        if name in _STRING_FIELDS:
+            row[name] = token
+            continue
         try:
-            value = float(token.strip())
+            row[name] = int(token)
         except ValueError:
             return None
-        row[name] = int(value) if name in _INT_FIELDS else value
     return row
 
 
-def read_aim_telemetry(path) -> tuple[list[dict], dict]:
-    """返回 (AIM 行列表, 计数统计)，统计键为 total/kept/skipped。"""
+def read_mst_telemetry(path) -> tuple[list[dict], dict]:
+    """返回 (MST 行列表, 计数统计)，统计键为 total/kept/skipped。"""
     rows: list[dict] = []
     total = 0
     with Path(path).open("r", encoding="utf-8", errors="replace") as fh:
         for raw in fh:
             total += 1
-            row = parse_aim_line(raw)
+            row = parse_mst_line(raw)
             if row is not None:
                 rows.append(row)
     return rows, {"total": total, "kept": len(rows), "skipped": total - len(rows)}
+
+
+def parse_diag_line(line: str):
+    """解析一行 DIAG 帧轨迹，前缀不对、列数不对或数值字段非法都返回 None。
+
+    固件上电时打印的 DIAG 表头行字段名会被转 float/int 时拒掉，与 MST 表头同理。
+    """
+    text = line.strip()
+    if not text.startswith(DIAG_PREFIX):
+        return None
+    parts = text[len(DIAG_PREFIX):].split(",")
+    if len(parts) != len(DIAG_FIELDS):
+        return None
+    row = {}
+    for name, token in zip(DIAG_FIELDS, parts):
+        token = token.strip()
+        try:
+            row[name] = int(token) if name in _DIAG_INT_FIELDS else float(token)
+        except ValueError:
+            return None
+    return row
+
+
+def read_diag_telemetry(path) -> tuple[list[dict], dict]:
+    """返回 (DIAG 行列表, 计数统计)，统计键为 total/kept/skipped。"""
+    rows: list[dict] = []
+    total = 0
+    with Path(path).open("r", encoding="utf-8", errors="replace") as fh:
+        for raw in fh:
+            total += 1
+            row = parse_diag_line(raw)
+            if row is not None:
+                rows.append(row)
+    return rows, {"total": total, "kept": len(rows), "skipped": total - len(rows)}
+
+
+def read_telemetry(path) -> tuple[list[dict], list[dict], dict]:
+    """一次读入混合 CSV，按前缀分流成 (MST 行, DIAG 行, 计数)。
+
+    计数键：total 总行数，mst 命中 MST 行数，diag 命中 DIAG 行数，skipped 两者都不匹配
+    且非注释非空的行数。空行与 `#` 注释行不计入 skipped。
+    """
+    mst_rows: list[dict] = []
+    diag_rows: list[dict] = []
+    total = 0
+    skipped = 0
+    with Path(path).open("r", encoding="utf-8", errors="replace") as fh:
+        for raw in fh:
+            total += 1
+            text = raw.strip()
+            if not text or text.startswith("#"):
+                continue
+            mst = parse_mst_line(raw)
+            if mst is not None:
+                mst_rows.append(mst)
+                continue
+            diag = parse_diag_line(raw)
+            if diag is not None:
+                diag_rows.append(diag)
+                continue
+            skipped += 1
+    counts = {"total": total, "mst": len(mst_rows), "diag": len(diag_rows),
+              "skipped": skipped}
+    return mst_rows, diag_rows, counts
 
 
 _MACRO_RE = re.compile(r"^\s*#define\s+([A-Za-z_]\w*)\s+(.+?)\s*$")
