@@ -128,6 +128,30 @@ if (next != CycleState::FAULT && !cycleGuardAllows(next)) {
 - 守卫不负责回退。`READY`、`AIM_ALLOWED`、`PRELOAD` 各自在分支里处理丢锁，例如
   `AIM_ALLOWED` 丢锁回 `READY`、`PRELOAD` 超中止窗口回 `READY`。
 
+### 4.1 当前组合的合法性核对
+
+守卫矩阵管的是迁移，`changeCycle()` 在每次转移前调用一次，判断「目标状态是否准进」。
+它管不到「已经处于的组合是否是漏进来的」。`main.cpp` 的 `cycleStateLegal()` 补这一层，
+每个周期核对一次当前 `s_cycle` 与 `s_aim` 的组合：
+
+```
+static bool cycleStateLegal() {
+    if (s_cycle == CycleState::FAULT) return true;
+    return cycleGuardAllows(s_cycle);
+}
+```
+
+它把当前状态当作 `next` 喂回 `cycleGuardAllows()`，复用同一张矩阵，没有复制阈值常量，
+也没有改动原函数的语义。`FAULT` 是任意时刻都合法的锁存态，单独放行。等价的直白表述是：
+非 `LOCKED` 的区域 B 下，当前区域 A 若落在 `[PRELOAD, INDEX]` 之外且枚举值大于 `READY`，
+即判非法。当前枚举里能被这条规则抓到的是 `AIM_ALLOWED` 与非 `LOCKED` 的区域 B 同时出现，
+也就是「没锁定却站在允许发射的门上」。
+
+核对点在 `loop()` 里 `advanceCycle()` 之前，看的是上一拍收敛后的稳定组合，不会碰到
+单拍内的瞬态（例如 `AIM_ALLOWED` 分支在丢锁的同一拍就回 `READY`）。判非法后先发
+`STATE_ILLEGAL` 事件，内容为当时的 `cycle`、`aim` 整数值，再 `enterFault()` 进硬故障，
+不做自动恢复。
+
 ---
 
 ## 5. 故障体系
@@ -147,6 +171,17 @@ if (next != CycleState::FAULT && !cycleGuardAllows(next)) {
 | 7 | `WATCHDOG` | 软 | `s_overrun_streak >= WATCHDOG_STREAK_N`，或单拍 `loop_us/1000 > WATCHDOG_HARD_OVERRUN_MS` | `faultClear()` → `SAFE` → `HOME` |
 | 8 | `MECH_STUCK` | 硬 | `RECOVER` 超 `RECOVER_TIMEOUT_MS` 仍 `!safetyMechRecovered()` | 软件清除无效；断电人工处理 |
 | 9 | `ESTOP` | 软 | 串口 `ESTOP`（`shellEmergencyStop()`） | `faultClear()` → `SAFE` → `HOME` |
+| 10 | `MEMBRANE_RUPTURE` | 硬 | 膜片破裂或气路泄漏，脉冲通道完整性无法由软件确认。触发点待硬件或后续实现 | 软件清除无效；断电更换膜片并做气密检查后重新上电 |
+| 11 | `DOUBLE_FEED` | 软 | 供给盘检出双片（检出后禁 Mode B，保留 Mode A）。触发点待硬件或后续实现，依赖供给盘位置传感器与索引逻辑 | `faultClear()` → `SAFE` → `HOME`，并清除叠片；储能态机构顶死时按硬故障处理 |
+| 12 | `FIRE_INHIBIT_SHORT` | 硬 | `FIRE_INHIBIT` 短路到许可侧，安全否决失效。触发点待硬件或后续实现，依赖双通道冗余输入 | 软件清除无效；断电排查双通道输入与接线后重新上电 |
+| 13 | `I2C_BUS_HANG` | 硬 | `io_expander.cpp` 维护运行期连续失败计数，达到 `I2C_BUS_HANG_FAIL_N` 后 `main.cpp` 周期里 `ioExpanderBusSuspectedHang()` 为真，`enterFault()` 置位 | 软件清除无效；断电重启总线与扩展器后重新上电 |
+| 14 | `STATE_ILLEGAL` | 硬 | `main.cpp` 周期里 `cycleStateLegal()` 判当前 cycle/aim 组合落在 `cycleGuardAllows()` 之外，`enterFault()` 置位并发事件记录 A、B 取值 | 软件清除无效；断电检查守卫矩阵后重新上电 |
+
+码 10..14 的枚举值与软硬分级已在 `aim_types.h` 就位。码 13、14 的触发点已接：
+`I2C_BUS_HANG` 的运行期连续失败计数在 `io_expander.cpp`（初始化事务不计入，上电失败仍走
+`PERIPH_INIT`），`STATE_ILLEGAL` 的当前组合核对在 `main.cpp` 的 `cycleStateLegal()`。码 10、11、
+12 的触发点待硬件或后续实现，`main.cpp` 里没有对应的 `enterFault()` 调用点，逐码的触发与清除
+明细见 `fault-codes.md`。
 
 `enterFault(code, why)` 的固定动作，先是锁存保护，再是安全动作：
 
@@ -239,7 +274,8 @@ CycleState: BOOT=0 SAFE=1 HOME=2 READY=3 AIM_ALLOWED=4 PRELOAD=5 ARMED=6
 AimState:   IDLE=0 CALIBRATING=1 SEARCHING=2 TRACKING=3 LOCKED=4 (5 保留空洞) CALIB_MODE=6
 FaultCode:  NONE=0 PERIPH_INIT=1 HOME_TIMEOUT=2 HOME_SWITCH_CONFLICT=3
             RELEASE_GATE_SELFTEST=4 OBS_LINK=5 INDEX_FAIL=6 WATCHDOG=7
-            MECH_STUCK=8 ESTOP=9
+            MECH_STUCK=8 ESTOP=9 MEMBRANE_RUPTURE=10 DOUBLE_FEED=11
+            FIRE_INHIBIT_SHORT=12 I2C_BUS_HANG=13 STATE_ILLEGAL=14
 ```
 
 加新状态的纪律：

@@ -1,6 +1,5 @@
 /**
  * calibration.cpp
- * calibration.h 的实现。使用 math/angle_utils、Preferences(NVS)、config.h。
  */
 
 #include "calibration.h"
@@ -174,7 +173,6 @@ bool calibrationAnglesToAxisDeg(const CalibrationData& data,
 // 3x3 线性方程组求解（列主元高斯消元）。A、b 都以值传递，允许内部破坏。
 static bool solve3(double A[3][3], double b[3], double x[3]) {
     for (int col = 0; col < 3; ++col) {
-        // 选主元
         int piv = col;
         double best = std::fabs(A[col][col]);
         for (int r = col + 1; r < 3; ++r) {
@@ -186,14 +184,12 @@ static bool solve3(double A[3][3], double b[3], double x[3]) {
             for (int c = 0; c < 3; ++c) std::swap(A[col][c], A[piv][c]);
             std::swap(b[col], b[piv]);
         }
-        // 消元
         for (int r = col + 1; r < 3; ++r) {
             double f = A[r][col] / A[col][col];
             for (int c = col; c < 3; ++c) A[r][c] -= f * A[col][c];
             A[r][col] = 0.0;
         }
     }
-    // 回代
     for (int r = 2; r >= 0; --r) {
         double s = b[r];
         for (int c = r + 1; c < 3; ++c) s -= A[r][c] * x[c];

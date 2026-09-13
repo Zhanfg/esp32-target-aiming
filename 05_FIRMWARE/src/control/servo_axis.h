@@ -1,11 +1,6 @@
 #pragma once
-/**
- * servo_axis.h
- * 单轴指向控制，替代第一期的 Axis。不再有双环 PID：
- *   无反馈（PWM 舵机）只做指令下发、机械限幅与角速度变化率限制；
- *   有反馈（总线舵机）在读回实际角后叠加一次位置校正。
- * 指令下发前统一走 servoDrive()，本模块不直接碰 LEDC/UART。
- */
+// servo_axis.h：单轴指向控制。无反馈（PWM 舵机）只做指令下发、机械限幅与角速度变化率限制；
+// 有反馈（总线舵机）读回实际角后叠加一次位置校正。指令下发统一走 servoDrive()，不直接碰 LEDC/UART。
 
 #include <cstdint>
 

@@ -88,6 +88,11 @@ enum class FaultCode : uint16_t {
     WATCHDOG = 7,
     MECH_STUCK = 8,
     ESTOP = 9,
+    MEMBRANE_RUPTURE = 10,
+    DOUBLE_FEED = 11,
+    FIRE_INHIBIT_SHORT = 12,
+    I2C_BUS_HANG = 13,
+    STATE_ILLEGAL = 14,
 };
 
 enum class FaultSeverity : uint8_t { NONE, SOFT, HARD };
@@ -102,11 +107,16 @@ inline FaultSeverity faultSeverity(FaultCode c) {
         case FaultCode::INDEX_FAIL:
         case FaultCode::WATCHDOG:
         case FaultCode::ESTOP:
+        case FaultCode::DOUBLE_FEED:
             return FaultSeverity::SOFT;
         case FaultCode::PERIPH_INIT:
         case FaultCode::HOME_SWITCH_CONFLICT:
         case FaultCode::RELEASE_GATE_SELFTEST:
         case FaultCode::MECH_STUCK:
+        case FaultCode::MEMBRANE_RUPTURE:
+        case FaultCode::FIRE_INHIBIT_SHORT:
+        case FaultCode::I2C_BUS_HANG:
+        case FaultCode::STATE_ILLEGAL:
             return FaultSeverity::HARD;
     }
     return FaultSeverity::HARD;
@@ -114,7 +124,6 @@ inline FaultSeverity faultSeverity(FaultCode c) {
 
 enum class FireMode : uint8_t { AIR_ONLY = 0, SOFT_PAYLOAD = 1 };
 
-// 第一期发射器抽象层仍保留实现，状态枚举按原样保留。
 enum class TransmitterState {
     SAFE,
     ARMED,

@@ -12,7 +12,6 @@
 // 构建版本：烧进镜像，启动横幅与遥测首行会打印，用于确认板上跑的是哪一版。
 #define AIM_BUILD_VERSION "0.2.0"
 
-// ===== 机构变体常量与研究门控（规格书 §30 STOP-01/02/03）=====
 // STOP-01/02 由实验结论决定是否需要回退单级：触发时把 STAGES 改回 1 并用构建
 // 开关关掉双级相关功能，不进 FAULT。STOP-03 同理关闭边界研究分支。
 #define MST_MECHANISM_STAGES             2      // 1=单级回退，2=双级串联
@@ -28,8 +27,7 @@
 #define AXIS_TILT  1
 #define AXIS_COUNT 2
 
-// ===== CAMERA PINS: OV2640/OV3660 等 DVP 摄像头并口 =====
-// Y2..Y9 对应 esp32-camera 的 D0..D7，顺序不可打乱。不同 S3-CAM 板的线序差异极大，
+// Y2..Y9 对应 esp32-camera 的 D0..D7，顺序不可打乱。不同 S3-CAM 板的线序差异很大，
 // 接错不会烧板，但会黑屏/花屏，首次烧录前对照原理图确认。
 #define CAM_PIN_PWDN        (-1)   // 待实测标定：-1 表示未接
 #define CAM_PIN_RESET       (-1)   // 待实测标定：-1 表示未接
@@ -55,7 +53,6 @@
 #define CAM_LEDC_CHANNEL    2
 #define CAM_LEDC_TIMER      2
 
-// ===== CONTROL: 机械限位与指向约束 =====
 // 机械限位（度）：pan ±180°，tilt -30~+60。
 #define PAN_MIN_DEG        (-180.0f)
 #define PAN_MAX_DEG        (180.0f)
@@ -98,8 +95,7 @@
 // 观测超时：超过则判定目标丢失并转 SEARCHING。
 #define OBS_TIMEOUT_MS      500
 
-// ===== SERVO: 两轴位置舵机 =====
-// 可替换实现由 SERVO_DRIVE_TYPE 编译期选择，采购前不必冻结选型。
+// 两轴位置舵机。实现由 SERVO_DRIVE_TYPE 编译期选择，采购前不必冻结选型。
 #define SERVO_DRIVE_PWM 0
 #define SERVO_DRIVE_BUS 1
 #define SERVO_DRIVE_TYPE SERVO_DRIVE_PWM   // 待实测标定
@@ -132,7 +128,6 @@
 #define SERVO_BUS_RX_PIN    (-1)     // 待实测标定
 #define SERVO_BUS_BAUD      1000000  // 待实测标定
 
-// ===== HOME: 上电归零（架构文档 §6.10）=====
 #define HOME_TIMEOUT_MS      3000   // 步骤 3：3 秒内不触发即失败
 #define HOME_SEEK_STEP_DEG   1.0f   // 每拍朝参考方向推进的角度
 #define HOME_SEEK_PERIOD_MS  20
@@ -143,7 +138,6 @@
 #define HOME_PAN_BACKOFF_DEG   5.0f // 待实测标定
 #define HOME_TILT_BACKOFF_DEG  5.0f // 待实测标定
 
-// ===== FIRING CYCLE: 两级脉冲核心与供给盘 =====
 #define RELEASE_CMD_PIN     3        // 待实测标定，直连，strapping 脚
 #define RELEASE_PULSE_MS    30       // 软件脉冲宽度；硬件单稳态另设上限（§6.6）
 #define STAGE1_STATE_PIN    40       // 待实测标定，直连中断
@@ -159,11 +153,17 @@
 #define MAG_POSITIONS        6       // 供给盘工位数
 #define FIRE_MODE_DEFAULT    0       // 0=Mode A 空气，1=Mode B 软载荷；待实测标定
 
-// ===== MCP23017: I2C0 慢速离散 I/O =====
+// MCP23017 接 I2C0，慢速离散 I/O。
 #define I2C0_SDA_PIN        45       // 待实测标定（strapping 脚，注意上电电平）
 #define I2C0_SCL_PIN        46       // 待实测标定（strapping 脚，注意上电电平）
 #define I2C0_FREQ_HZ        400000
 #define MCP23017_ADDR       0x20     // A2A1A0 全低
+
+// 运行期 I2C0 连续失败达到该值判总线卡死（I2C_BUS_HANG，硬故障）。取值依据：
+// safetyGateUpdate() 每拍读一次扩展器，CONTROL_LOOP_HZ=100 即正常负载下每 10ms
+// 至少一次成功事务；连续 50 次失败约等于 500ms 无成功事务，远超单次总线毛刺的
+// 恢复窗口，又不至于把偶发 NACK 直接判死。载重、线长或上拉改动后实测重标。
+#define I2C_BUS_HANG_FAIL_N  50      // 待实测标定
 
 // 扩展器位编号：0-7 = GPA0-GPA7，8-15 = GPB0-GPB7。
 #define EXP_BOUNDARY_CMD_BIT    0
@@ -178,25 +178,26 @@
 #define EXP_FIRE_INHIBIT_BIT    9
 #define EXP_EXTERNAL_ALLOW_BIT  10
 
-// 输出位掩码：这些位配置为输出，其余为输入并启用内部上拉。
+// 输出位掩码：这些位配置为输出，其余为输入。输入位不启用 MCP23017 内部上拉
+// （io_expander.cpp 把 GPPU 写 0），上拉/下拉交给外部电阻按信号极性决定。
+// 许可类输入按 §6.7 走外部下拉、开路即禁止；若启用内部上拉会与其外部下拉对拉，
+// 破坏失效方向，所以这里保持关闭。
 #define EXP_OUTPUT_MASK ((1u << EXP_BOUNDARY_CMD_BIT) | \
                          (1u << EXP_PRELOAD_CMD_BIT) | \
                          (1u << EXP_MAG_INDEX_CMD_BIT) | \
                          (1u << EXP_STATUS_LED_BIT))
 
-// ===== WATCHDOG: 控制环超预算保护 =====
 // 连续超预算达到该拍数，或单拍超过硬上限，直接进 FAULT（对应 §6.9 第 9 条）。
 #define WATCHDOG_STREAK_N        100
 #define WATCHDOG_HARD_OVERRUN_MS 100
 #define OBS_LINK_FAIL_N          100  // 连续取帧失败上限，超过判观测链路异常
 
-// ===== TRANSMITTER: 第一期发射器抽象层参数（第二期由四路命令层取代，保留占位）=====
+// 第一期发射器抽象层参数；第二期由四路命令层取代，此处保留占位。
 #define TRANSMITTER_PIN             3      // 待实测标定
 #define TRANSMITTER_ACTIVE_LEVEL    1      // 1=高电平触发
 #define TRANSMITTER_FIRE_PULSE_MS   50     // 占位脉冲宽度
 #define TRANSMITTER_COOLDOWN_MS     500    // 两次发射强制冷却
 
-// ===== VISION: 图像采集与目标分割 =====
 // QVGA(320x240) 在算力、带宽与精度间折中；提分辨率需同步评估帧率。
 #define VISION_FRAME_SIZE   FRAMESIZE_QVGA
 #define VISION_SRC_W        320    // 与 VISION_FRAME_SIZE 对应，标定默认值用
@@ -219,12 +220,11 @@
 // 连通域达到该面积置信度为 1.0，按比例递减。
 #define VISION_CONF_AREA_REF 300.0f
 
-// ===== COMMS: 串口遥测 =====
 #define TELEMETRY_BAUD      115200
 // 关闭逐帧遥测时仍以此频率输出心跳，证明固件存活。
 #define TELEMETRY_HEARTBEAT_MS 1000
 
-// ===== 引脚与资源预留（扩展用，只有注释，不新增宏） =====
+// 引脚与资源预留（扩展用，只有注释，不新增宏）
 // 完整表格见 05_FIRMWARE/io-map.md。改动任一 *_PIN 后同步本段。
 //
 // 已占用 GPIO：

@@ -1,7 +1,6 @@
 /**
  * servo_axis.cpp
- * servo_axis.h 的实现，用到 hal/servo、math/angle_utils 与 config.h。
- * 位置在无反馈实现里等于当前指令角，只是估计值，不能当实测角度用。
+ * 无反馈实现里 position 等于当前指令角，只是估计值，不能当实测角度用。
  */
 
 #include "servo_axis.h"

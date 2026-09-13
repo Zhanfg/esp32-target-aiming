@@ -1,6 +1,5 @@
 /**
  * home.cpp
- * home.h 的实现。参考开关经 safety_gate 读取，舵机指令经 servo_axis 下发。
  */
 
 #include "home.h"

@@ -28,7 +28,6 @@
 #include "math/angle_utils.h"
 #include "vision/vision.h"
 
-// ===== 状态 =====
 static CycleState s_cycle = CycleState::BOOT;
 static AimState s_aim = AimState::IDLE;
 static FaultCode s_fault = FaultCode::NONE;
@@ -79,7 +78,6 @@ static void setAim(AimState next, const char* why);
 static void updateAimQuality(bool obs_fresh, uint32_t now_ms);
 static bool faultClear();
 
-// ===== 释放链与输出 =====
 static void releaseChainOff() {
     ioExpanderWritePin(EXP_PRELOAD_CMD_BIT, 0);
     ioExpanderWritePin(EXP_MAG_INDEX_CMD_BIT, 0);
@@ -97,7 +95,6 @@ static void setNote(const char* s) {
     std::snprintf(s_operator_note, sizeof(s_operator_note), "%s", s ? s : "-");
 }
 
-// ===== 阶段事件中断 =====
 static void IRAM_ATTR stage1Isr() {
     s_stage1_us = micros();
     s_stage1_count++;
@@ -107,7 +104,6 @@ static void IRAM_ATTR stage2Isr() {
     s_stage2_count++;
 }
 
-// ===== 故障与状态迁移 =====
 static void enterFault(FaultCode code, const char* why) {
     if (s_fault_latched) return; // 已锁存则保留首个故障码
     s_fault = code;
@@ -146,6 +142,14 @@ static bool cycleGuardAllows(CycleState next) {
             return (uint8_t)next <= (uint8_t)CycleState::READY;
     }
     return false;
+}
+
+// 当前组合的合法性查询，与 cycleGuardAllows 职责分开：后者判「能否迁移到 next」，
+// 这里判「当前 cycle/aim 组合是否本就不该存在」。把当前状态当作 next 喂回守卫，
+// 复用同一张矩阵而不复制常量；FAULT 是任意时刻都合法的锁存态，单独放行。
+static bool cycleStateLegal() {
+    if (s_cycle == CycleState::FAULT) return true;
+    return cycleGuardAllows(s_cycle);
 }
 
 static void changeCycle(CycleState next, const char* why) {
@@ -187,7 +191,6 @@ static bool faultClear() {
     return true;
 }
 
-// ===== 区域 B 指向质量 =====
 static void updateAimQuality(bool obs_fresh, uint32_t now_ms) {
     if (s_aim == AimState::CALIB_MODE) return;
     if (!s_cal_ok) {
@@ -254,7 +257,6 @@ static void updateTracking(const TargetObservation& obs, float dt_s) {
     servoAxisSetTargetDeg(AXIS_TILT, cur_tilt + s_elevation_deg);
 }
 
-// ===== 发射周期推进 =====
 static void advanceCycle(uint32_t now_ms, bool obs_fresh) {
     switch (s_cycle) {
         case CycleState::BOOT:
@@ -395,7 +397,6 @@ static void advanceCycle(uint32_t now_ms, bool obs_fresh) {
     }
 }
 
-// ===== 标定外壳回调 =====
 static void shellGetObservation(TargetObservation& out) { out = s_obs; }
 static void shellGetAxes(AxisState& pan, AxisState& tilt) { servoAxisGetState(pan, tilt); }
 static AimState shellGetState() { return s_aim; }
@@ -542,6 +543,12 @@ void loop() {
     // 输入采样每拍都做，故障态也刷新，便于 STATUS 显示现场电平。
     safetyGateUpdate(now_ms);
 
+    // I2C0 运行期连续失败达到阈值：扩展器状态不再可信，判总线卡死（硬故障）。
+    // 上一行的 safetyGateUpdate() 已在本拍完成读事务并刷新连续失败计数。
+    if (!s_fault_latched && ioExpanderBusSuspectedHang()) {
+        enterFault(FaultCode::I2C_BUS_HANG, "i2c0 bus hang");
+    }
+
     // 失稳事件时间戳由中断捕获，这里把增量转成日志（§15.2 需要精确时间）。
     static uint8_t last_stage1_count = 0;
     static uint8_t last_stage2_count = 0;
@@ -576,6 +583,16 @@ void loop() {
     }
     if (s_obs.valid && (now_ms - s_obs.t_ms) <= OBS_TIMEOUT_MS) {
         obs_fresh = true;
+    }
+
+    // 双区域组合核对：守卫矩阵只约束迁移，这里补一次对当前稳定组合的核对，
+    // 捕捉逻辑漏洞落进来的矩阵外组合。非法即进硬故障，并把当时的 A/B 取值留档。
+    if (!s_fault_latched && !cycleStateLegal()) {
+        char combo[32];
+        std::snprintf(combo, sizeof(combo), "cycle=%u aim=%u",
+                      (unsigned)s_cycle, (unsigned)s_aim);
+        telemetryEmitEvent("STATE_ILLEGAL", combo);
+        enterFault(FaultCode::STATE_ILLEGAL, combo);
     }
 
     if (!s_fault_latched) {

@@ -1,6 +1,5 @@
 /**
  * telemetry.cpp
- * telemetry.h 的实现，用 Arduino Serial 与 config.h。
  *
  * CSV 表头（§19，共 17 个字段，字段名与顺序不可改）：
  *   MST,timestamp,experiment_id,prototype_version,mechanism_version,mode,boundary_state,

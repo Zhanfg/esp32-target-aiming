@@ -1,6 +1,6 @@
 /**
  * calib_shell.cpp
- * calib_shell.h 的实现。命令解析与点表管理在本文件，控制动作经 CalibShellHooks 转发。
+ * 命令解析与点表管理在本文件，控制动作经 CalibShellHooks 转发到 main。
  */
 
 #include "calib_shell.h"

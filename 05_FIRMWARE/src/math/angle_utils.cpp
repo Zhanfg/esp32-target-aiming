@@ -1,8 +1,7 @@
 /**
  * angle_utils.cpp
- * angle_utils.h 的实现，只用 <cmath>，不碰硬件寄存器。
  *
- * 输入为 NaN/Inf 时行为未定义，调用方（视觉、编码器）需先保证有限。
+ * 输入为 NaN/Inf 时行为未定义，调用方（视觉等）需先保证有限。
  */
 
 #include "angle_utils.h"
@@ -43,8 +42,8 @@ float angleNormalizeDeg(float deg, float min_deg, float max_deg) {
 }
 
 float angleDiffDeg(float a, float b) {
-    // 环绕分支：最短路径角差。必须走"先相减再归一"而不是裸减，
-    // 否则从 +179° 转到 -179° 会得到 -358°（错误），实际只需 +2°。
+    // 环绕分支：最短路径角差，先相减再归一。裸减在 +179° 转 -179° 时得 -358°，
+    // 实际只需 +2°。
     return angleNormalize180(b - a);
 }
 

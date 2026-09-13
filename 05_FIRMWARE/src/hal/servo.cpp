@@ -1,6 +1,6 @@
 /**
  * servo.cpp
- * servo.h 的实现。PWM 实现用 LEDC 出 50Hz 舵机信号；总线实现是占位骨架。
+ * PWM 实现用 LEDC 出 50Hz 舵机信号；总线实现是占位骨架。
  *
  * 脉宽到占空比的换算：
  *   duty = 脉宽(us) × 1e-6 × 频率(Hz) × (2^分辨率 - 1)
@@ -40,7 +40,6 @@ float axisServoMaxDeg(uint8_t axis) {
     return (axis == AXIS_PAN) ? SERVO_PAN_MAX_DEG : SERVO_TILT_MAX_DEG;
 }
 
-// ===== 三线 PWM 舵机 =====
 class ServoPwm : public ServoDrive {
 public:
     bool init() override {
@@ -145,8 +144,7 @@ private:
     float last_deg_[AXIS_COUNT] = { 0.0f, 0.0f };
 };
 
-// ===== 总线舵机（占位）=====
-// 采购选型后需要补齐：
+// 总线舵机占位。采购选型后需要补齐：
 //   1) 帧格式：帧头、ID、指令字、参数长度、校验（和校验或 CRC）与半双工收发切换时序；
 //   2) 波特率：与 SERVO_BUS_BAUD 对应，确认舵机支持；
 //   3) 读位置与负载的命令字：用于 readPanDeg/readTiltDeg 与失速判定；

@@ -1,11 +1,6 @@
 #pragma once
-/**
- * servo.h
- * 云台舵机抽象。用 SERVO_DRIVE_TYPE 在编译期选实现，采购前不必冻结选型：
- *   ServoPwm：经典三线 PWM，LEDC 输出 50Hz、脉宽 SERVO_PULSE_MIN_US..MAX_US，无反馈。
- *   ServoBus：总线舵机占位，协议未定，只保留接口与骨架，hasFeedback() 为 true。
- * 两实现在下发前都把角度按 config.h 的机械限幅夹紧。
- */
+// servo.h：云台舵机抽象，SERVO_DRIVE_TYPE 编译期选实现。ServoPwm 出 50Hz 三线 PWM 无反馈，
+// ServoBus 为总线占位（hasFeedback()=true）。两实现下发前按 config.h 机械限幅夹紧。
 
 #include <cstdint>
 
@@ -31,5 +26,4 @@ public:
     virtual void emergencyRelease() = 0;
 };
 
-// 返回编译期选定的实现（单例）。
 ServoDrive& servoDrive();

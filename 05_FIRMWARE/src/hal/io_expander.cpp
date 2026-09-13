@@ -3,9 +3,10 @@
  * MCP23017 的 I2C0 驱动。寄存器用 BANK=0 布局：A 组在低位寄存器，B 组在高位。
  *
  * 安全侧约定：
- *   输入位读不到 → 0（未断言）。MECH_RECOVERED / MAG_INDEX_OK / *_HOME 断言为高，
- *   0 表示"未复位/未对齐/未触发"，是禁止侧；FIRE_INHIBIT / EXTERNAL_ALLOW 有效为高，
- *   0 表示"禁止/未许可"。任何 I2C 失败都让这两类信号落到禁止。
+ *   输入位读不到 → 0（未断言）；I2C 失败由 safety_gate 统一按禁止侧解释（forceSafe），
+ *   不信任单次读到的 0。MECH_RECOVERED 是常闭干接点对地（§6.6），外部上拉，机构复位
+ *   时触点为低，safety_gate 取反后使用；MAG_INDEX_OK / *_HOME 断言为高，0 表示
+ *   "未对齐/未触发"，是禁止侧；FIRE_INHIBIT / EXTERNAL_ALLOW 有效为高，0 表示"禁止/未许可"。
  *   输出位上电默认全 0，即 BOUNDARY/PRELOAD/MAG_INDEX 全断、STATUS_LED 灭。
  */
 
@@ -33,20 +34,37 @@ constexpr TickType_t kI2cTimeout = pdMS_TO_TICKS(20);
 
 bool s_ready = false;
 bool s_healthy = false;
+bool s_runtime_active = false;   // 初始化完成后才把事务计入运行期失败计数
+uint32_t s_fail_streak = 0;
 uint8_t s_addr = 0;
 uint16_t s_shadow_out = 0;
 
+// 每次底层事务后统一更新健康标志。初始化阶段（s_runtime_active 为假）只更新
+// s_healthy，不进运行期连续失败计数：上电就坏属于 PERIPH_INIT，与 I2C_BUS_HANG
+// 的「跑着跑着坏了」分开。
+void noteTransaction(bool ok) {
+    s_healthy = ok;
+    if (!s_runtime_active) return;
+    if (ok) {
+        s_fail_streak = 0;
+    } else if (s_fail_streak < 0xFFFFFFFFul) {
+        s_fail_streak++;
+    }
+}
+
 bool writeReg(uint8_t reg, uint8_t value) {
     uint8_t buf[2] = { reg, value };
-    esp_err_t err = i2c_master_write_to_device(I2C_NUM_0, s_addr, buf, sizeof(buf), kI2cTimeout);
-    s_healthy = (err == ESP_OK);
-    return s_healthy;
+    const esp_err_t err =
+        i2c_master_write_to_device(I2C_NUM_0, s_addr, buf, sizeof(buf), kI2cTimeout);
+    noteTransaction(err == ESP_OK);
+    return err == ESP_OK;
 }
 
 bool readRegs(uint8_t reg, uint8_t* buf, size_t len) {
-    esp_err_t err = i2c_master_write_read_device(I2C_NUM_0, s_addr, &reg, 1, buf, len, kI2cTimeout);
-    s_healthy = (err == ESP_OK);
-    return s_healthy;
+    const esp_err_t err =
+        i2c_master_write_read_device(I2C_NUM_0, s_addr, &reg, 1, buf, len, kI2cTimeout);
+    noteTransaction(err == ESP_OK);
+    return err == ESP_OK;
 }
 
 void writeWord(uint8_t reg_lo, uint8_t reg_hi, uint16_t value) {
@@ -99,6 +117,9 @@ bool ioExpanderInit(uint8_t addr) {
     writeWord(kRegOlatA, kRegOlatB, s_shadow_out);
 
     s_ready = true;
+    // 到这里初始化事务全部成功，之后的事务才算运行期，开始累计连续失败。
+    s_runtime_active = true;
+    s_fail_streak = 0;
     return true;
 }
 
@@ -149,3 +170,7 @@ uint16_t ioExpanderReadInputsSnapshot() {
 }
 
 bool ioExpanderHealthy() { return s_ready && s_healthy; }
+
+bool ioExpanderBusSuspectedHang() {
+    return s_ready && s_runtime_active && s_fail_streak >= I2C_BUS_HANG_FAIL_N;
+}

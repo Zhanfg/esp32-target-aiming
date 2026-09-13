@@ -1,6 +1,5 @@
 /**
  * vision.cpp
- * vision.h 的实现，用到 esp32-camera、esp_heap_caps、config.h。
  *
  * 内存：工作缓冲和连通域栈优先放 PSRAM（8MB 版本足够），失败退回内部 RAM。
  * 工作缓冲只存目标强度（HSV 的 V），同时当掩码和质心权重，省掉一张灰度图。

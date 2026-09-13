@@ -1,6 +1,5 @@
 /**
  * safety_gate.cpp
- * safety_gate.h 的实现。只依赖 io_expander 与 config.h 的位定义。
  */
 
 #include "safety_gate.h"

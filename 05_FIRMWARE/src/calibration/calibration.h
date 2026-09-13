@@ -1,10 +1,6 @@
 #pragma once
-/**
- * calibration.h
- * 标定数据存取与换算：内参、畸变、像素→角度仿射、零点偏移，以及对应点最小二乘。
- * 持久化用 Preferences(NVS)。流程：打 N 组 (px,py)<->(pan,tilt) 点，N>=6 更稳；
- * 解算 2x3 仿射；RMSE 超约 1° 说明打点质量差或模型不合适，补点重打。
- */
+// calibration.h：标定数据存取与换算（内参、畸变、像素→角度仿射、零点偏移、最小二乘）；
+// 持久化用 Preferences(NVS)，打 N>=6 组点解算 2x3 仿射，RMSE 超约 1° 补点重打。
 
 #include <cstdint>
 
@@ -18,8 +14,7 @@ struct CalibrationData {
     float dist[5] = {0,0,0,0,0}; // (k1,k2,p1,p2,k3)
 
     // 像素齐次 [px,py,1] → 角度(deg) 的 2x3 仿射：
-    //   bearing   = a[0][0]*px + a[0][1]*py + a[0][2]
-    //   elevation = a[1][0]*px + a[1][1]*py + a[1][2]
+    //   bearing = a[0][0]*px + a[0][1]*py + a[0][2]；elevation = a[1][0]*px + a[1][1]*py + a[1][2]
     float affine[2][3] = {{0,0,0},{0,0,0}};
 
     float pan_offset_deg = 0.0f;
@@ -27,7 +22,6 @@ struct CalibrationData {
     bool valid = false;
 };
 
-// 占位默认：fx=fy=0.8*width（约 64° 水平视场）、主点取中心、畸变 0、valid=false。
 void calibrationSetDefaults(CalibrationData& out, int width, int height);
 
 // NVS 逐字段读写（不用整体 blob，便于字段增删）。无有效记录返回 false。
