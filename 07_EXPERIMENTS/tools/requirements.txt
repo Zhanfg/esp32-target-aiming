@@ -1,0 +1,11 @@
+# 数值计算，所有脚本都依赖
+numpy
+
+# 棋盘格检测与内参标定，calibrate_intrinsics.py 用
+opencv-python
+
+# 串口读取固件遥测，capture_telemetry.py 用
+pyserial
+
+# 运行 07_EXPERIMENTS/tools/tests 下的单元测试
+pytest

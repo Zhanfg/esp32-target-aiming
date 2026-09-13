@@ -21,14 +21,22 @@ ESP32-S3 上的本地视觉目标锁定系统。摄像头找到目标，单片�
 
 ```
 esp32-target-aiming/
-├─ docs/               设计文档与数学推导
-├─ algo_reference/     Python 参考实现，算法在 PC 上可独立运行验证
-├─ firmware/           ESP32-S3 固件
-└─ tools/              标定与分析脚本
+├─ 00_MASTER_SPEC/      规格书与统一架构方案
+├─ 01_PRIOR_ART/        现有来源与专利梳理
+├─ 02_REQUIREMENTS/     方案设计、标定推导、硬件接线
+├─ 03_CAD/              MST-01A ~ E 结构模型
+├─ 04_SIMULATION/       准静态、瞬态、参数扫描
+├─ 05_FIRMWARE/         ESP32-S3 固件、算法参考实现、I/O 映射
+├─ 06_BOM/              物料清单
+├─ 07_EXPERIMENTS/      工具链与 A ~ E 实验
+├─ 08_DATA/             实验原始数据
+├─ 09_PLOTS/            结果图表
+├─ 10_FAILURE_ANALYSIS/ 失效分析
+└─ 11_PUBLICATION_NOTES/ 论文与专利记录
 ```
 
 依赖方向单向向下：`main → control → hal`，`vision` / `calibration` / `comms` 只依赖
-`aim_types`，`math` 是公共底座。细节见 [docs/方案设计.md](docs/方案设计.md)。
+`aim_types`，`math` 是公共底座。细节见 [02_REQUIREMENTS/方案设计.md](02_REQUIREMENTS/方案设计.md)。
 
 ## 几个设计取舍
 
@@ -55,13 +63,13 @@ esp32-target-aiming/
 | P5 | 整机标定与精度评估 | 待开始 |
 | P6 | 交付文档 | 待开始 |
 
-阶段划分与验收指标见 [docs/方案设计.md](docs/方案设计.md) 第 11 节。
+阶段划分与验收指标见 [02_REQUIREMENTS/方案设计.md](02_REQUIREMENTS/方案设计.md) 第 11 节。
 
 ## 安全
 
 这套东西含电机驱动机构和发射器接口。
 
-上电前对照实物原理图核对 `firmware/include/config.h` 里的全部引脚。电机和逻辑分开供电、
+上电前对照实物原理图核对 `05_FIRMWARE/include/config.h` 里的全部引脚。电机和逻辑分开供电、
 单点共地，电机侧并一个 470µF 以上的电解电容。
 
 电机铭牌上的减速比和编码器 PPR 要如实填进配置。这两个数字填错，整条角度链会按比例偏，
@@ -71,9 +79,9 @@ esp32-target-aiming/
 
 ## 文档
 
-- [方案设计](docs/方案设计.md)：架构、坐标系约定、算法公式、双环 PID、实施计划与验收标准
-- [标定与几何推导](docs/标定与几何推导.md)：针孔模型、畸变与反畸变迭代、像素↔角度互逆性证明、仿射最小二乘、精度预算
-- [硬件接线与选型](docs/硬件接线与选型.md)：BOM、引脚分配表、供电与接地、TB6612 真值表、上电检查清单
+- [方案设计](02_REQUIREMENTS/方案设计.md)：架构、坐标系约定、算法公式、双环 PID、实施计划与验收标准
+- [标定与几何推导](02_REQUIREMENTS/标定与几何推导.md)：针孔模型、畸变与反畸变迭代、像素↔角度互逆性证明、仿射最小二乘、精度预算
+- [硬件接线与选型](02_REQUIREMENTS/硬件接线与选型.md)：BOM、引脚分配表、供电与接地、TB6612 真值表、上电检查清单
 
 ## 许可
 

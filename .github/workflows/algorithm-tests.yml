@@ -6,11 +6,11 @@ name: algorithm-tests
 on:
   push:
     paths:
-      - 'algo_reference/**'
+      - '05_FIRMWARE/algo_reference/**'
       - '.github/workflows/algorithm-tests.yml'
   pull_request:
     paths:
-      - 'algo_reference/**'
+      - '05_FIRMWARE/algo_reference/**'
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
         python-version: ['3.10', '3.12']
     defaults:
       run:
-        working-directory: algo_reference
+        working-directory: 05_FIRMWARE/algo_reference
     steps:
       - uses: actions/checkout@v4
 
