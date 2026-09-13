@@ -1,0 +1,46 @@
+{
+  "input": "sample_axis_points.csv",
+  "intrinsics": {
+    "width": 320,
+    "height": 240,
+    "fx": 256.0,
+    "fy": 256.0,
+    "cx": 159.5,
+    "cy": 119.5,
+    "dist_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "source": "config.h 图像尺寸 320x240 的占位内参（未标定）"
+  },
+  "seed": 0,
+  "holdout_fraction": 0.3,
+  "train_count": 9,
+  "holdout_count": 4,
+  "affine_angle_to_pan_tilt": [
+    [
+      1.0300268191831943,
+      0.02005118161535337,
+      -0.6130573747762245
+    ],
+    [
+      0.009854681952357832,
+      1.019845555557999,
+      0.89416189484085
+    ]
+  ],
+  "rmse_deg": 0.02764782715616885,
+  "rmse_pan_deg": 0.02267047425498797,
+  "rmse_tilt_deg": 0.015825673556323444,
+  "train_rmse_deg": 0.033021358991196535,
+  "grade": "优秀，可直接用于静态打靶",
+  "coverage": {
+    "span_x_ratio": 0.8875,
+    "span_y_ratio": 0.85,
+    "bbox_area_ratio": 0.7543749999999999,
+    "outside_image": 0
+  }
+}

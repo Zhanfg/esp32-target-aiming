@@ -17,6 +17,7 @@
 #include "config.h"
 #include "aim_types.h"
 #include "calibration/calibration.h"
+#include "comms/calib_shell.h"
 #include "comms/telemetry.h"
 #include "control/axis.h"
 #include "control/turntable.h"
@@ -25,10 +26,7 @@
 #include "hal/transmitter.h"
 #include "vision/vision.h"
 
-// ---------------------------------------------------------------------------
-// 全局状态
-// ---------------------------------------------------------------------------
-static MotorTransmitter g_transmitter; // 通过 Transmitter 基类接口使用
+static MotorTransmitter g_transmitter;
 
 static AimState s_state = AimState::IDLE;
 static bool s_fault_latched = false;
@@ -51,10 +49,6 @@ static TurretSolution s_sol; // 最近一次解算结果（遥测用）
 static void enterFault(const char* why);
 static void changeState(AimState next, const char* why);
 
-// ---------------------------------------------------------------------------
-// 安全接口
-// ---------------------------------------------------------------------------
-
 // 显式武装/解除发射器。解除永远允许；武装仅在 LOCKED 且无故障时允许。
 bool aimArmTransmitter(bool enable) {
     if (!enable) {
@@ -64,6 +58,10 @@ bool aimArmTransmitter(bool enable) {
     }
     if (s_fault_latched) {
         telemetryEmitEvent("ARM", "拒绝：FAULT");
+        return false;
+    }
+    if (s_state == AimState::CALIB_MODE) {
+        telemetryEmitEvent("ARM", "拒绝：标定模式");
         return false;
     }
     if (s_state != AimState::LOCKED) {
@@ -109,9 +107,35 @@ static void changeState(AimState next, const char* why) {
     telemetryEmitEvent("STATE", why ? why : "");
 }
 
-// ---------------------------------------------------------------------------
-// 初始化
-// ---------------------------------------------------------------------------
+// 标定外壳接口：回调注入，calib_shell 不直接依赖 main 的静态变量。
+static void shellGetObservation(TargetObservation& out) { out = s_obs; }
+static void shellGetAxes(AxisState& pan, AxisState& tilt) { turretGetState(pan, tilt); }
+static AimState shellGetState() { return s_state; }
+static CalibrationData* shellGetCalibration() { return &s_cal; }
+static void shellApplyCalibration() {
+    s_cal_ok = s_cal.valid;
+    turretSetCalibration(s_cal);
+}
+static void shellJog(float pan_deg, float tilt_deg) { turretSetAxesDeg(pan_deg, tilt_deg); }
+static void shellEmergencyStop() { enterFault("shell estop"); }
+
+static bool shellSetCalibrationMode(bool enable) {
+    if (enable) {
+        if (s_fault_latched) return false;
+        if (s_state == AimState::CALIB_MODE) return true;
+        changeState(AimState::CALIB_MODE, "manual calibration");
+        // 标定期间发射器物理断开，且 aimArmTransmitter 会继续拒绝武装。
+        g_transmitter.emergencyStop();
+        telemetryEmitEvent("CAL", "enter manual calibration");
+        return true;
+    }
+    if (s_state != AimState::CALIB_MODE) return false;
+    turretClearHold();
+    changeState(s_cal_ok ? AimState::SEARCHING : AimState::CALIBRATING, "leave calibration");
+    telemetryEmitEvent("CAL", "exit manual calibration");
+    return true;
+}
+
 void setup() {
     telemetryInit(TELEMETRY_BAUD);
 
@@ -179,6 +203,20 @@ void setup() {
     }
     turretSetCalibration(s_cal);
 
+    // 串口标定外壳：注入状态访问与动作回调。
+    CalibShellHooks shell_hooks;
+    shell_hooks.getObservation = shellGetObservation;
+    shell_hooks.getAxes = shellGetAxes;
+    shell_hooks.getState = shellGetState;
+    shell_hooks.calibration = shellGetCalibration;
+    shell_hooks.applyCalibration = shellApplyCalibration;
+    shell_hooks.setCalibrationMode = shellSetCalibrationMode;
+    shell_hooks.jog = shellJog;
+    shell_hooks.emergencyStop = shellEmergencyStop;
+    if (!calibShellInit(shell_hooks)) {
+        Serial.println("[cal] 标定外壳未启用：回调注入不完整");
+    }
+
     // 收尾状态
     if (s_fault_latched) {
         // 保持 FAULT
@@ -190,10 +228,11 @@ void setup() {
     telemetryEmitEvent("BOOT", "setup done");
 }
 
-// ---------------------------------------------------------------------------
-// 主循环
-// ---------------------------------------------------------------------------
 void loop() {
+    // 串口命令在最前面轮询：loop 未到控制节拍时会提前 return，
+    // 放在这里才能按 UART 到达速率收字节，避免长命令被硬件 FIFO 丢掉。
+    calibShellPoll();
+
     const uint32_t t_loop_start = micros();
     const uint32_t now_ms = millis();
 
@@ -227,7 +266,9 @@ void loop() {
 
     // 状态机
     if (!s_fault_latched) {
-        if (!s_vision_ok) {
+        if (s_state == AimState::CALIB_MODE) {
+            // 手动标定：状态由 calib_shell 的 CAL START/EXIT 控制，不跑自动跟踪判定。
+        } else if (!s_vision_ok) {
             enterFault("vision not ready");
         } else if (!s_cal_ok) {
             changeState(AimState::CALIBRATING, "calibration invalid");
@@ -249,7 +290,12 @@ void loop() {
 
     // 控制：故障时已切断，正常时每拍都跑（含归零保持）。
     if (!s_fault_latched) {
-        s_sol = turretUpdate(obs_fresh ? s_obs : TargetObservation(), now_ms);
+        if (s_state == AimState::CALIB_MODE) {
+            // 标定模式忽略视觉，只维持 CAL JOG 设定的保持目标；未 JOG 时保持当前位置。
+            s_sol = turretUpdate(TargetObservation(), now_ms);
+        } else {
+            s_sol = turretUpdate(obs_fresh ? s_obs : TargetObservation(), now_ms);
+        }
         // 解算器移植后，s_sol 将来自 AimSolver。
         turretGetState(s_pan_state, s_tilt_state);
     } else {

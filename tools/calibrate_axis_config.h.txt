@@ -1,0 +1,7 @@
+// 轴角标定结果：q = A * (bearing_deg, elevation_deg, 1)^T，单位度。
+// 留出点 RMSE 0.0276 度，来自 sample_axis_points.csv。
+// 对应 CalibrationData::affine，可作 NVS 初始值或编译期兜底。
+static const float kCalibAffineAngleToPanTilt[2][3] = {
+    { 1.030027f, 0.020051f, -0.613057f },
+    { 0.009855f, 1.019846f, 0.894162f },
+};

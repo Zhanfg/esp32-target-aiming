@@ -1,0 +1,22 @@
+# 行尾统一。仓库内一律存 LF，检出时按平台自动转换：Windows 得到 CRLF，
+# Linux/macOS 得到 LF。不加这一条的话 Windows 上每次提交都会刷几十条
+# "LF will be replaced by CRLF" 警告，而且不同平台克隆下来行尾不一致。
+* text=auto
+
+# 二进制文件不做行尾转换，也不要做文本 diff。
+*.bin    binary
+*.elf    binary
+*.map    binary
+*.hex    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.pdf    binary
+*.step   binary
+*.stp    binary
+*.stl    binary
+*.zip    binary
+
+# 锁文件按生成物对待，不参与合并冲突。
+package-lock.json  -diff merge=binary
