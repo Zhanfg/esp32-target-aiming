@@ -301,7 +301,8 @@ REL_IDLE    = NOT(RELEASE_PULSE)
 | 原理图网表 | `kicad-cli sch export netlist` | 成功，97 个符号实例（含 2 个 ERC 电源旗标，实际采购件 95 个）、60 个网络，逻辑节点与本文一致 |
 | 原理图 ERC | `kicad-cli sch erc --severity-all` | 0 条 error；97 条 `lib_symbol_issues` 警告，原因是内联符号库 `rg` 未注册进 `sym-lib-table`，不影响网表与显示 |
 | 原理图导出 | `kicad-cli sch export pdf` / `svg` | 成功，PDF 与 SVG 已在本目录 |
-| PCB DRC | `kicad-cli pcb drc --severity-all` | 0 条短路、0 条间距、0 条开窗桥接错误；1 条丝印重叠警告；151 个未连接项来自信号布线尚未做完 |
+| PCB DRC（自动布线前） | `kicad-cli pcb drc --severity-all` | 1 条丝印重叠警告；151 个未连接项来自信号布线尚未做完 |
+| PCB DRC（自动布线并重灌铜箔后） | 同上 | 20 条违规（19 条线宽、1 条丝印）加 23 个未连接项。详见第 14 节 |
 | PCB 导出 | `kicad-cli pcb export pdf` / `svg` | 成功 |
 
 说明两点。原理图的连接用贴在引脚端点的网络标签表达，不是逐段连线的画法，电气连接正确，
@@ -313,7 +314,15 @@ KiCad 图形界面逐屏人工检查过，上面的结论全部来自 `kicad-cli
 
 1. 双通道冗余触点与安全输入短路到 3V3 的检出尚未实现。这是 FM-08 与 §6.7 的缺口，也是
    本板最该先补的部分。
-2. 信号布线未完成。初版只保证布局与关键功率链，正式投板前要把剩余网络走完并复跑 DRC。
+2. 信号布线已自动布通大半，但未干净。用 Freerouting 2.4.1（JAR 在 `~/.kicad-mcp/freerouting.jar`）
+   自动布线，未连接项从 151 降到 23。管线是：`pcbnew.ExportSpecctraDSN` 导出 DSN、
+   `java -jar freerouting.jar -de <dsn> -do <ses> --gui.enabled=false -mp 30` 布线、
+   `pcbnew.ImportSpecctraSES` 回导、`pcbnew.ZONE_FILLER` 重灌铜箔。**重灌那一步不能省**，
+   否则铜箔没避让新走线，DRC 会把 511 处报成短路。
+
+   两个残留问题。一是线宽：DSN 里的规则写的是 `(width 200)`（0.2 mm），工程 netclass 也是 0.2 mm，
+   但 Freerouting 实际用了 0.15 mm，留下 19 条线宽违规。二是 23 个未连接项，Freerouting 只报 2 条
+   布不通，其余应该是重灌铜箔后不再靠铺铜糊住的连接。正式投板前这两项都要清掉。
 3. 执行器电流尚未冻结。`M1`、`F2`、`D1` 的规格按中小电流电磁铁选的，执行器定型后按峰值
    电流与浪涌时间复核，必要时换更大封装的 MOSFET 和保险丝。
 4. 归零复位脉宽与释放脉宽都要在台架实测后微调，见 `test-procedure.md`。
